@@ -14,23 +14,31 @@
 
 extern std::unique_ptr<PikaConf> g_pika_conf;
 /* SET key value [NX] [XX] [EX <seconds>] [PX <milliseconds>] */
+// 这个函数主要是判断，函数的参数是否合理。但是很多枚举值都没有注释。
 void SetCmd::DoInitial() {
+  // CheckArg 从哪里来的？ 他怎么知道每个命令的参数size应该是多少的？ 
   if (!CheckArg(argv_.size())) {
     res_.SetRes(CmdRes::kWrongNum, kCmdNameSet);
     return;
   }
   key_ = argv_[1];
   value_ = argv_[2];
+  // 这里有个条件的赋值。 
   condition_ = SetCmd::kNONE;
   sec_ = 0;
+  // 可能这个argv_ 有自己独特的处理吧。 
   size_t index = 3;
+  // 因为已经有两个元素了，所以如果size肯定是大于2的。
+  // TODO(DDD)
   while (index != argv_.size()) {
     std::string opt = argv_[index];
+    // 忽略大小写比较。 
     if (strcasecmp(opt.data(), "xx") == 0) {
       condition_ = SetCmd::kXX;
     } else if (strcasecmp(opt.data(), "nx") == 0) {
       condition_ = SetCmd::kNX;
     } else if (strcasecmp(opt.data(), "vx") == 0) {
+      // 是什么玩意啊？   TODO(DDD)
       condition_ = SetCmd::kVX;
       index++;
       if (index == argv_.size()) {
@@ -41,21 +49,26 @@ void SetCmd::DoInitial() {
       }
     } else if ((strcasecmp(opt.data(), "ex") == 0) || (strcasecmp(opt.data(), "px") == 0)) {
       condition_ = (condition_ == SetCmd::kNONE) ? SetCmd::kEXORPX : condition_;
+      // 后面应该还有一个TTL时间的参数。
       index++;
       if (index == argv_.size()) {
+        // 如果参数，不对就返回语法错误。
         res_.SetRes(CmdRes::kSyntaxErr);
         return;
       }
+      // 解析时间，如果解析初五哦，返回无法正确解析成为int。
       if (pstd::string2int(argv_[index].data(), argv_[index].size(), &sec_) == 0) {
         res_.SetRes(CmdRes::kInvalidInt);
         return;
       }
-
+      // 如果是px，则代表的事毫秒。
       if (strcasecmp(opt.data(), "px") == 0) {
         sec_ /= 1000;
       }
+      // 表示这个键，具有过期时间。
       has_ttl_ = true;
     } else {
+      // 这个分支，表示命令打错了。
       res_.SetRes(CmdRes::kSyntaxErr);
       return;
     }
