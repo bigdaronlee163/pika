@@ -78,6 +78,9 @@ void SetCmd::DoInitial() {
 
 void SetCmd::Do() {
   int32_t res = 1;
+  // set 命令根据conditon来选择执行的方式。
+  // 命令的执行结果保存在 s_ 中。 s_ 也是Cmd中的属性。 
+  // db_ 也是Cmd中的属性。
   switch (condition_) {
     case SetCmd::kXX:
       s_ = db_->storage()->Setxx(key_, value_, &res, sec_);

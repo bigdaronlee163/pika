@@ -162,6 +162,7 @@ class DB : public std::enable_shared_from_this<DB>, public pstd::noncopyable {
   std::shared_mutex dbs_rw_;
   // class may be shared, using shared_ptr would be a better choice
   std::shared_ptr<pstd::lock::LockMgr> lock_mgr_;
+  // 使用的这里的storage_的方法。 
   std::shared_ptr<storage::Storage> storage_;
   std::shared_ptr<PikaCache> cache_;
   /*

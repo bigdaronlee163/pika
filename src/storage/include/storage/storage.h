@@ -165,7 +165,7 @@ struct BGTask {
          const std::vector<std::string>& _argv = {})
       : type(_type), operation(_opeation), argv(_argv) {}
 };
-
+// 这是是存储的实现。
 class Storage {
  public:
   Storage(); // for unit test only

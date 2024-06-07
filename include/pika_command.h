@@ -590,9 +590,12 @@ class Cmd : public std::enable_shared_from_this<Cmd> {
   CmdRes res_;
   PikaCmdArgsType argv_;
   std::string db_name_;
+  // 保存结果
   rocksdb::Status s_;
+  // 使用的数据库
   std::shared_ptr<DB> db_;
   std::shared_ptr<SyncMasterDB> sync_db_;
+  // 两个都事weak_ptr 
   std::weak_ptr<net::NetConn> conn_;
   std::weak_ptr<std::string> resp_;
   CmdStage stage_ = kNone;

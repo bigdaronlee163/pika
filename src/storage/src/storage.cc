@@ -135,6 +135,7 @@ std::unique_ptr<Redis>& Storage::GetDBInstance(const std::string& key) {
 }
 
 // Strings Commands
+// Storage 层面的set方法。调用的db的set方法。
 Status Storage::Set(const Slice& key, const Slice& value) {
   auto& inst = GetDBInstance(key);
   return inst->Set(key, value);

@@ -707,7 +707,7 @@ Status Redis::MSetnx(const std::vector<KeyValue>& kvs, int32_t* ret) {
   }
   return s;
 }
-
+// 调用db的put方法，这里就是rocksdb的方法。
 Status Redis::Set(const Slice& key, const Slice& value) {
   StringsValue strings_value(value);
   ScopeRecordLock l(lock_mgr_, key);
