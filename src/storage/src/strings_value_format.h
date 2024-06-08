@@ -19,7 +19,9 @@ namespace storage {
 class StringsValue : public InternalValue {
  public:
   explicit StringsValue(const rocksdb::Slice& user_value) : InternalValue(DataType::kStrings, user_value) {}
+  // 虚函数，具有默认的实现。将StringsValue转成rocksdb的Slice 
   virtual rocksdb::Slice Encode() override {
+    // 获取时间，还包括其他的元信息（kSuffixReserveLength + 2 * kTimestampLength + kTypeLength）
     size_t usize = user_value_.size();
     size_t needed = usize + kSuffixReserveLength + 2 * kTimestampLength + kTypeLength;
     char* dst = ReAllocIfNeeded(needed);
@@ -34,6 +36,7 @@ class StringsValue : public InternalValue {
     EncodeFixed64(dst, ctime_);
     dst += kTimestampLength;
     EncodeFixed64(dst, etime_);
+    // 构造一个Slice，通过Slice提供的起始地址和结束地址。
     return {start_, needed};
   }
 };

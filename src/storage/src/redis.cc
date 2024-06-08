@@ -152,6 +152,14 @@ Status Redis::Open(const StorageOptions& storage_options, const std::string& db_
   column_families.emplace_back("zset_score_cf", zset_score_cf_ops);
   // stream CF
   column_families.emplace_back("stream_data_cf", stream_data_cf_ops);
+  /*
+  最后，使用rocksdb::DB::Open方法打开数据库。这个方法需要以下参数：
+    db_ops：一个DBOptions对象，包含了数据库的通用配置选项。
+    db_path：数据库文件的路径。
+    column_families：一个包含列family描述符的向量。每个描述符表示一个列family，包括名称和配置选项。
+    &handles_：一个用于处理数据库操作的句柄向量。
+    &db_：一个指向rocksdb::DB对象的引用，用于返回给调用者。
+  */
   return rocksdb::DB::Open(db_ops, db_path, column_families, &handles_, &db_);
 }
 

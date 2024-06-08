@@ -707,15 +707,16 @@ Status Redis::MSetnx(const std::vector<KeyValue>& kvs, int32_t* ret) {
   }
   return s;
 }
-// 调用db的put方法，这里就是rocksdb的方法。
+// Set方法实际上是调用db的put方法，这里就是rocksdb的方法。
 Status Redis::Set(const Slice& key, const Slice& value) {
+  // 需要将key value包装为 StringsValue  BaseKey
   StringsValue strings_value(value);
   ScopeRecordLock l(lock_mgr_, key);
 
   BaseKey base_key(key);
   return db_->Put(default_write_options_, base_key.Encode(), strings_value.Encode());
 }
-
+// 
 Status Redis::Setxx(const Slice& key, const Slice& value, int32_t* ret, int64_t ttl) {
   bool not_found = true;
   std::string old_value;

@@ -78,10 +78,12 @@ protected:
   char space_[200];
   char* start_ = nullptr;
   rocksdb::Slice user_value_;
+  // 键值对的版本号  过期时间  创建时间
   uint64_t version_ = 0;
   uint64_t etime_ = 0;
   uint64_t ctime_ = 0;
   DataType type_;
+  // 在RocksDB中，保留字段通常用于存储与键值对存储和检索相关的额外信息。
   char reserve_[16] = {0};
 };
 
