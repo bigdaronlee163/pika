@@ -716,7 +716,7 @@ Status Redis::Set(const Slice& key, const Slice& value) {
   BaseKey base_key(key);
   return db_->Put(default_write_options_, base_key.Encode(), strings_value.Encode());
 }
-// 
+// 不存在才set
 Status Redis::Setxx(const Slice& key, const Slice& value, int32_t* ret, int64_t ttl) {
   bool not_found = true;
   std::string old_value;
@@ -724,6 +724,7 @@ Status Redis::Setxx(const Slice& key, const Slice& value, int32_t* ret, int64_t 
 
   BaseKey base_key(key);
   ScopeRecordLock l(lock_mgr_, key);
+  // 获取key对应的旧value
   Status s = db_->Get(default_read_options_, base_key.Encode(), &old_value);
   if (s.ok() && !ExpectedMetaValue(DataType::kStrings, old_value)) {
     if (ExpectedStale(old_value)) {
@@ -740,7 +741,7 @@ Status Redis::Setxx(const Slice& key, const Slice& value, int32_t* ret, int64_t 
   } else if (!s.IsNotFound()) {
     return s;
   }
-
+  // 如果没有，进行设置，前面的都是判断是否已经存在了，或者类型是否正确。
   if (not_found) {
     *ret = 0;
     return s;
@@ -814,6 +815,7 @@ Status Redis::Setex(const Slice& key, const Slice& value, int64_t ttl) {
     return Status::InvalidArgument("invalid expire time");
   }
   StringsValue strings_value(value);
+  // 设置时间。 
   auto s = strings_value.SetRelativeTimestamp(ttl);
   if (s != Status::OK()) {
     return s;
@@ -821,6 +823,7 @@ Status Redis::Setex(const Slice& key, const Slice& value, int64_t ttl) {
 
   BaseKey base_key(key);
   ScopeRecordLock l(lock_mgr_, key);
+  // 这个里面会涉及ttl时间。
   return db_->Put(default_write_options_, base_key.Encode(), strings_value.Encode());
 }
 

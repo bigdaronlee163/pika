@@ -606,7 +606,7 @@ void MgetCmd::DoUpdateCache() {
 
 void KeysCmd::DoInitial() {
   if (!CheckArg(argv_.size())) {
-    res_.SetRes(CmdRes::kWrongNum, kCmdNameKeys);
+    res_.SetRes(CmdRes::+, kCmdNameKeys);
     return;
   }
   pattern_ = argv_[1];

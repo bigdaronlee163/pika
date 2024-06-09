@@ -401,7 +401,7 @@ class Redis {
     }
     return false;
   }
-
+  // 该函数用于检查给定的meta_value是否已过时。这个函数主要用于处理Redis元数据（如集合、列表、哈希表等），并检查它们是否已经过期或为空。
   inline bool ExpectedStale(const std::string &meta_value) {
     auto meta_type = static_cast<enum DataType>(static_cast<uint8_t>(meta_value[0]));
     if (meta_type == DataType::kZSets || meta_type == DataType::kSets || meta_type == DataType::kHashes) {
@@ -465,6 +465,7 @@ private:
   // rocksdb::Env* env_ = nullptr;
 
   std::vector<rocksdb::ColumnFamilyHandle*> handles_;
+  // 读写策略。 
   rocksdb::WriteOptions default_write_options_;
   rocksdb::ReadOptions default_read_options_;
   rocksdb::CompactRangeOptions default_compact_range_options_;

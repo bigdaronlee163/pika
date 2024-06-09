@@ -1483,6 +1483,7 @@ Status Storage::GetType(const std::string& key, enum DataType& type) {
 }
 
 Status Storage::Keys(const DataType& data_type, const std::string& pattern, std::vector<std::string>* keys) {
+  // 用于接受返回的匹配的key
   keys->clear();
   std::vector<DataType> types;
   types.push_back(data_type);
