@@ -380,6 +380,10 @@ void InitCmdTable(CmdTable* cmd_table) {
   std::unique_ptr<Cmd> pkrscanrangeptr = std::make_unique<PKRScanRangeCmd>(
       kCmdNamePKRScanRange, -4, kCmdFlagsRead |  kCmdFlagsOperateKey | kCmdFlagsSlow);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKRScanRange, std::move(pkrscanrangeptr)));
+  //// DumpCmd
+  std::unique_ptr<Cmd> dumpptr =
+      std::make_unique<DumpCmd>(kCmdNameDump, 2, kCmdFlagsRead |  kCmdFlagsKv  | kCmdFlagsDoThroughDB | kCmdFlagsUpdateCache | kCmdFlagsReadCache | kCmdFlagsSlow);
+  cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNameDump, std::move(dumpptr)));
 
   // Hash
   ////HDelCmd
@@ -846,7 +850,7 @@ std::vector<std::string> Cmd::current_key() const { return {""}; }
 void Cmd::Execute() {
   ProcessCommand();
 }
-
+// TODO(DDD): 命令可以暂停，回来之后，判断是在那个过程中。
 void Cmd::ProcessCommand(const HintKeys& hint_keys) {
   if (stage_ == kNone) {
     InternalProcessCommand(hint_keys);

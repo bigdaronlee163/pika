@@ -74,6 +74,36 @@ class GetCmd : public Cmd {
   rocksdb::Status s_;
 };
 
+class DumpCmd : public Cmd {
+ public:
+  DumpCmd(const std::string& name, int arity, uint32_t flag)
+      : Cmd(name, arity, flag, static_cast<uint32_t>(AclCategory::KEYSPACE)){};
+  std::vector<std::string> current_key() const override {
+    std::vector<std::string> res;
+    res.push_back(key_);
+    return res;
+  }
+  void Do() override;
+  void DoThroughDB() override;
+  void DoUpdateCache() override;
+  void ReadCache() override;
+  // TODO(DDD): 
+  /* 
+  Split(const HintKeys& hint_keys)：这个方法是一个虚函数，用于将一个包含多个键的集合分割成多个子集。参数hint_keys是一个包含多个键的集合，返回值是一个包含多个子集的集合。实现原理是将输入的集合按照某个键值进行分割，每个键值对应一个子集。
+  Merge()：这个方法也是一个虚函数，用于将多个子集合并成一个集合。返回值是一个合并后的集合。实现原理是将多个子集按照某个键值进行合并，合并后的集合中每个键值对应一个子集。
+  */
+  void Split(const HintKeys& hint_keys) override{};
+  void Merge() override{};
+  Cmd* Clone() override { return new DumpCmd(*this); }
+
+ private:
+  std::string key_;
+  std::string value_;
+  int64_t sec_ = 0;
+  void DoInitial() override;
+  rocksdb::Status s_;
+};
+
 class DelCmd : public Cmd {
  public:
   DelCmd(const std::string& name, int arity, uint32_t flag)

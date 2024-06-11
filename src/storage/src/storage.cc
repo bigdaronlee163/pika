@@ -368,6 +368,11 @@ Status Storage::PKSetexAt(const Slice& key, const Slice& value, int64_t timestam
   return inst->PKSetexAt(key, value, timestamp);
 }
 
+Status Storage::Dump(const Slice& key, std::string* value, int64_t* ttl) {
+  auto& inst = GetDBInstance(key);
+  return inst->Dump(key, value, ttl);
+}
+
 // Hashes Commands
 Status Storage::HSet(const Slice& key, const Slice& field, const Slice& value, int32_t* res) {
   auto& inst = GetDBInstance(key);

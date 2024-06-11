@@ -73,6 +73,7 @@ class PikaCache : public pstd::noncopyable, public std::enable_shared_from_this<
   rocksdb::Status Type(std::string& key, std::string* value);
   rocksdb::Status RandomKey(std::string* key);
   rocksdb::Status GetType(const std::string& key, bool single, std::vector<std::string>& types);
+  rocksdb::Status Dump(std::string& key, std::string* value);
 
   // String Commands
   rocksdb::Status Set(std::string& key, std::string& value, int64_t ttl);

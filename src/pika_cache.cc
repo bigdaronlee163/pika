@@ -285,6 +285,12 @@ Status PikaCache::Get(std::string& key, std::string *value) {
   return caches_[cache_index]->Get(key, value);
 }
 
+Status PikaCache::Dump(std::string& key, std::string *value) {
+  int cache_index = CacheIndex(key);
+  std::lock_guard lm(*cache_mutexs_[cache_index]);
+  return caches_[cache_index]->Get(key, value);
+}
+
 Status PikaCache::MSet(const std::vector<storage::KeyValue> &kvs) {
   for (const auto &item : kvs) {
     auto [key, value] = item;

@@ -53,6 +53,7 @@ public:
   Status Persist(std::string& key);
   Status Type(std::string& key, std::string *value);
   Status RandomKey(std::string *key);
+  Status Dump(const std::string& key, std::string *value);
 
   // String Commands
   Status Set(std::string& key, std::string &value, int64_t ttl);
