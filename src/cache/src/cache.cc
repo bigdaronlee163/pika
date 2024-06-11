@@ -267,6 +267,27 @@ void RedisCache::ConvertObjectToString(robj *obj, std::string *value) {
   }
 }
 
+Status RedisCache::Dump(const std::string& key, std::string *value) {
+  robj *val;
+  robj *kobj = createObject(OBJ_STRING, sdsnewlen(key.data(), key.size()));
+  DEFER {
+    DecrObjectsRefCount(kobj);
+  };
+  int ret = RcGet(cache_, kobj, &val);
+  if (C_OK != ret) {
+    if (REDIS_KEY_NOT_EXIST == ret) {
+      return Status::NotFound("key not in cache");
+    } else {
+      return Status::Corruption("RcGet failed");
+    }
+  }
+
+  value->clear();
+  ConvertObjectToString(val, value);
+
+  return Status::OK();
+}
+
 }  // namespace cache
 
 /* EOF */

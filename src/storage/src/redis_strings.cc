@@ -961,6 +961,43 @@ Status Redis::Setvx(const Slice& key, const Slice& value, const Slice& new_value
   return Status::OK();
 }
 
+Status Redis::Dump(const Slice& key, std::string* value, int64_t* ttl) {
+  value->clear();
+  BaseKey base_key(key);
+  Status s = db_->Get(default_read_options_, base_key.Encode(), value);
+  std::string meta_value = *value;
+  if (s.ok() && !ExpectedMetaValue(DataType::kStrings, meta_value)) {
+    if (ExpectedStale(meta_value)) {
+      s = Status::NotFound();
+    } else {
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() + ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kStrings)] + "get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+    }
+  }
+  if (s.ok()) {
+    ParsedStringsValue parsed_strings_value(value);
+    if (parsed_strings_value.IsStale()) {
+      value->clear();
+      *ttl = -2;
+      return Status::NotFound("Stale");
+    } else {
+      parsed_strings_value.StripSuffix();
+      *ttl = parsed_strings_value.Etime();
+      if (*ttl == 0) {
+        *ttl = -1;
+      } else {
+        int64_t curtime;
+        rocksdb::Env::Default()->GetCurrentTime(&curtime);
+        *ttl = *ttl - curtime >= 0 ? *ttl - curtime : -2;
+      }
+    }
+  } else if (s.IsNotFound()) {
+    value->clear();
+    *ttl = -2;
+  }
+
+  return s;
+}
+
 Status Redis::Delvx(const Slice& key, const Slice& value, int32_t* ret) {
   *ret = 0;
   std::string old_value;

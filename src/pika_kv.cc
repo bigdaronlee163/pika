@@ -190,6 +190,53 @@ void GetCmd::DoUpdateCache() {
   }
 }
 
+
+
+
+void DumpCmd::DoInitial() {
+  if (!CheckArg(argv_.size())) {
+    res_.SetRes(CmdRes::kWrongNum, kCmdNameDump);
+    return;
+  }
+  key_ = argv_[1];
+}
+
+void DumpCmd::Do() {
+  s_ = db_->storage()->Dump(key_, &value_, &sec_);
+  // 这里是处理结果，然后往res_中存储符合redis协议的响应。
+  if (s_.ok()) {
+    res_.AppendStringLenUint64(value_.size());
+    res_.AppendContent(value_);
+  } else if (s_.IsNotFound()) {
+    res_.AppendStringLen(-1);
+  } else if (s_.IsInvalidArgument()) {
+    res_.SetRes(CmdRes::kMultiKey);
+  } else {
+    res_.SetRes(CmdRes::kErrOther, s_.ToString());
+  }
+}
+
+void DumpCmd::ReadCache() {
+  auto s = db_->cache()->Get(key_, &value_);
+  if (s.ok()) {
+    res_.AppendStringLen(value_.size());
+    res_.AppendContent(value_);
+  } else {
+    res_.SetRes(CmdRes::kCacheMiss);
+  }
+}
+
+void DumpCmd::DoThroughDB() {
+  res_.clear();
+  Do();
+}
+
+void DumpCmd::DoUpdateCache() {
+  if (s_.ok()) {
+    db_->cache()->WriteKVToCache(key_, value_, sec_);
+  }
+}
+
 void DelCmd::DoInitial() {
   if (!CheckArg(argv_.size())) {
     res_.SetRes(CmdRes::kWrongNum, name());

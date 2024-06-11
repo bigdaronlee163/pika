@@ -193,6 +193,7 @@ class Redis {
 
   Status GetType(const Slice& key, enum DataType& type);
   Status IsExist(const Slice& key);
+  Status Dump(const Slice& key, std::string* value, int64_t* ttl);
   // Hash Commands
   Status HDel(const Slice& key, const std::vector<std::string>& fields, int32_t* ret);
   Status HExists(const Slice& key, const Slice& field);

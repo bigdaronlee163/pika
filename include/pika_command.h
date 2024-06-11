@@ -116,6 +116,8 @@ const std::string kCmdNameScanx = "scanx";
 const std::string kCmdNamePKSetexAt = "pksetexat";
 const std::string kCmdNamePKScanRange = "pkscanrange";
 const std::string kCmdNamePKRScanRange = "pkrscanrange";
+const std::string kCmdNameDump = "dump";
+const std::string kCmdNameRestore = "restore";
 
 // Hash
 const std::string kCmdNameHDel = "hdel";
@@ -256,7 +258,18 @@ constexpr const char* ErrTypeMessage = "Invalid argument: WRONGTYPE";
 
 using PikaCmdArgsType = net::RedisCmdArgsType;
 static const int RAW_ARGS_LEN = 1024 * 1024;
+// TODO(DDD): 
+/*
 
+读写（RW）：表示该命令可以读取和写入数据。
+本地（Local）：表示该命令仅在本地数据库上执行，而不是在分布式数据库上执行。
+暂停（Suspend）：表示该命令在执行过程中可以暂停，以便其他命令可以执行。
+读取缓存（ReadCache）：表示该命令从缓存中读取数据，而不是从数据库中读取。
+管理员需求（AdminRequire）：表示该命令需要管理员权限才能执行。
+更新缓存（UpdateCache）：表示该命令在执行完成后更新缓存，以便其他命令可以使用。
+Through DB：表示该命令通过数据库执行，而不是在本地执行。
+
+*/
 enum CmdFlagsMask {
   kCmdFlagsMaskRW = 1,
   kCmdFlagsMaskLocal = (1 << 1),
@@ -490,6 +503,10 @@ class PikaClientConn;
 class Cmd : public std::enable_shared_from_this<Cmd> {
  public:
   friend class PikaClientConn;
+  // TODO(DDD): 
+  /*
+  这些成员分别表示命令的三个阶段：未开始、二进制日志阶段和执行阶段。
+  */
   enum CmdStage { kNone, kBinlogStage, kExecuteStage };
   struct HintKeys {
     HintKeys() = default;

@@ -969,6 +969,9 @@ class Storage {
   // return >=0 the number of keys that were removed
   int64_t Del(const std::vector<std::string>& keys);
 
+  // Dump the value of key. If the key does not exist
+  // the special value nil is returned
+  Status Dump(const Slice& key, std::string* value, int64_t* ttl);
 
   // Iterate over a collection of elements
   // return an updated cursor that the user need to use as the cursor argument
