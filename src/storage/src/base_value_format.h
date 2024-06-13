@@ -30,7 +30,7 @@ constexpr char* DataTypeToString(DataType type) {
   return DataTypeStrings[static_cast<int>(type)];
 }
 // 通过将 DataType 转成可读性更好的 tag 字符，来方便调试。
-constexpr char* DataTypeToTagString(DataType type) {
+constexpr char DataTypeToTagString(DataType type) {
   if (type < DataType::kStrings || type > DataType::kNones) {
     return DataTypeTag[static_cast<int>(DataType::kNones)];
   }
@@ -91,7 +91,7 @@ protected:
   DataType type_;
   char reserve_[16] = {0};
 };
-
+// 解析出来的内部value.
 class ParsedInternalValue {
 public:
   // Use this constructor after rocksdb::DB::Get(), since we use this in

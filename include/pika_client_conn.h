@@ -66,7 +66,8 @@ class PikaClientConn : public net::RedisConn {
   PikaClientConn(int fd, const std::string& ip_port, net::Thread* server_thread, net::NetMultiplexer* mpx,
                  const net::HandleType& handle_type, int max_conn_rbuf_size);
   ~PikaClientConn() = default;
-
+  // net 层通过 ProcessRedisCmds的调用，Pika上层可以自己定义对于接受命令后的后续处理流程。
+  // 可以定义是异步还是同步。
   void ProcessRedisCmds(const std::vector<net::RedisCmdArgsType>& argvs, bool async, std::string* response) override;
 
   void BatchExecRedisCmd(const std::vector<net::RedisCmdArgsType>& argvs);

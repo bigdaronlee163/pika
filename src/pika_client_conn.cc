@@ -259,6 +259,7 @@ void PikaClientConn::ProcessRedisCmds(const std::vector<net::RedisCmdArgsType>& 
                                       std::string* response) {
   time_stat_->Reset();
   if (async) {
+    // worker thread 调用 ProcessRedisCmds，将待处理Cmd封装成BgTaskArg。
     auto arg = new BgTaskArg();
     arg->redis_cmds = argvs;
     time_stat_->enqueue_ts_ = pstd::NowMicros();
@@ -272,16 +273,20 @@ void PikaClientConn::ProcessRedisCmds(const std::vector<net::RedisCmdArgsType>& 
     std::string opt = argvs[0][0];
     pstd::StringToLower(opt);
     bool is_slow_cmd = g_pika_conf->is_slow_cmd(opt);
+    // BgTaskArg任务放入线程池中，后续由线程池中的一个线程继续处理这个请求。
     g_pika_server->ScheduleClientPool(&DoBackgroundTask, arg, is_slow_cmd);
+    // worker thread 的调用返回，worker thread 继续运行自己流程。
     return;
   }
+  // 为什么不是else的逻辑？ 
   BatchExecRedisCmd(argvs);
 }
-
+// ThreadPoolThread 处理流程
 void PikaClientConn::DoBackgroundTask(void* arg) {
   std::unique_ptr<BgTaskArg> bg_arg(static_cast<BgTaskArg*>(arg));
   std::shared_ptr<PikaClientConn> conn_ptr = bg_arg->conn_ptr;
   conn_ptr->time_stat_->dequeue_ts_ = pstd::NowMicros();
+  // ThreadPoolThread调用DoBackgroundTask，检查BgTaskArg 的合法性。
   if (bg_arg->redis_cmds.empty()) {
     conn_ptr->NotifyEpoll(false);
     return;
@@ -292,7 +297,7 @@ void PikaClientConn::DoBackgroundTask(void* arg) {
       return;
     }
   }
-
+  // 调用BatchExecRedisCmd，在此线程中对所有命令进行逐一处理。
   conn_ptr->BatchExecRedisCmd(bg_arg->redis_cmds);
 }
 
@@ -301,15 +306,18 @@ void PikaClientConn::BatchExecRedisCmd(const std::vector<net::RedisCmdArgsType>&
   for (const auto& argv : argvs) {
     std::shared_ptr<std::string> resp_ptr = std::make_shared<std::string>();
     resp_array.push_back(resp_ptr);
+    // 调用 ExecRedisCmd 进行命令的具体处理。
     ExecRedisCmd(argv, resp_ptr);
   }
   time_stat_->process_done_ts_ = pstd::NowMicros();
+  // 调用TryWriteResp 对于返回的所有结果整合，之后通知 WorkerThread 该PikaClientConn内的结果可以写回客户端。
   TryWriteResp();
 }
 
 void PikaClientConn::TryWriteResp() {
   int expected = 0;
   if (resp_num.compare_exchange_strong(expected, -1)) {
+    // WriteResp 为Redisconn中的方法。 
     for (auto& resp : resp_array) {
       WriteResp(*resp);
     }

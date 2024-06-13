@@ -17,14 +17,22 @@ const uint64_t InitalLeftIndex = 9223372036854775807;
 const uint64_t InitalRightIndex = 9223372036854775808U;
 
 /*
+* 比 hash  zset  set 增加了 2 个字段，现在共8个字段。 
 *| type | list_size | version | left index | right index | reserve |  cdate | timestamp |
 *|  1B  |     8B    |    8B   |     8B     |      8B     |   16B   |    8B  |     8B    |
+
+ list size 和 left index 和 right index的作用是什么？ 
+
+  列表的大小（list size）是指列表中元素的数量。左索引（left index）和右索引（right index）是用于访问列表中元素的两个指针，它们分别表示列表中第一个元素和最后一个元素的位置。
+
+左索引通常用0或-1表示，表示列表中的第一个元素。例如，如果列表中有5个元素，那么左索引为0，表示第一个元素。右索引通常用列表大小减1表示，表示列表中的最后一个元素。例如，如果列表中有5个元素，那么右索引为4，表示最后一个元素。
+ 
 */
 class ListsMetaValue : public InternalValue {
  public:
   explicit ListsMetaValue(const rocksdb::Slice& user_value)
       : InternalValue(DataType::kLists, user_value), left_index_(InitalLeftIndex), right_index_(InitalRightIndex) {}
-
+  // 这个里面都是编码的函数
   rocksdb::Slice Encode() override {
     size_t usize = user_value_.size();
     size_t needed = usize + kVersionLength + 2 * kListValueIndexLength +
@@ -77,6 +85,8 @@ class ListsMetaValue : public InternalValue {
 class ParsedListsMetaValue : public ParsedInternalValue {
  public:
   // Use this constructor after rocksdb::DB::Get();
+  // 这个里面都是解码的函数和方法。 也就是从rocksdb中获取到数据之后，用于解码具体的value。然后获取数据。
+  // TODO(DDD): 怎么存储到rocskdb中的？ 在存入的时候，执行Encode函数。
   explicit ParsedListsMetaValue(std::string* internal_value_str)
       : ParsedInternalValue(internal_value_str) {
     assert(internal_value_str->size() >= kListsMetaValueSuffixLength);
@@ -104,6 +114,7 @@ class ParsedListsMetaValue : public ParsedInternalValue {
   }
 
   // Use this constructor in rocksdb::CompactionFilter::Filter();
+  // 在合并法索的时候，解码，然后判断这条数据是否已经过期，就可以在压缩的时候，将数据丢掉。
   explicit ParsedListsMetaValue(const rocksdb::Slice& internal_value_slice)
       : ParsedInternalValue(internal_value_slice) {
     assert(internal_value_slice.size() >= kListsMetaValueSuffixLength);
@@ -135,7 +146,16 @@ class ParsedListsMetaValue : public ParsedInternalValue {
       value_->erase(value_->size() - kListsMetaValueSuffixLength, kListsMetaValueSuffixLength);
     }
   }
+  /* 
+  
+  这段代码中的 `SetVersionToValue` 函数是用来设置版本号的，它会将版本号编码到数据中。
+  在这里， `version_`  是一个成员变量，而  `value_`  是一个指向数据的指针。
+  在构造函数中设置了  `version_`  的值，但在  `SetVersionToValue`  
+  函数中需要将该值编码到数据中，因此需要再次设置一遍。
+  这样确保在每次调用  `SetVersionToValue`  函数时，都会使用最新的版本号来进行编码。
 
+  在 UpdateVersion 有用到。 
+  */
   void SetVersionToValue() override {
     if (value_) {
       char* dst = const_cast<char*>(value_->data()) + value_->size() - kListsMetaValueSuffixLength;

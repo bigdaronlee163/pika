@@ -498,7 +498,24 @@ struct UnblockTaskArgs {
 };
 
 class PikaClientConn;
+/*
 
+在PikaClientConn的通用处理流程中，
+对于不同Cmd的操作都是调用其基类处理函数Initial和Execute，
+Initial和Execute函数内部会调用纯虚函数DoInitial和Do，通过多态查找派生类的真正实现。
+
+任何具体的命令继承Cmd之后，需要实现DoInitial和Do 两个纯虚函数。在之后的通用处理流程中Cmd会做相应的调用。Cmd对外主要暴露Initial 和Execute 两个接口。
+
+1，Initial清除前一次调用的残留数据，同时调用DoInitial虚函数。
+
+2，Execute判断pika运行模式，主要调用InternalProcessCommand。
+
+  2.1，对于操作DB 和Binlog 这两个动作加锁，确保DB 和Binlog 是一致的。
+
+  2.2，调用DoCommand，其内部主要调用Do 虚函数。
+
+  2.3，调用DoBinlog，将命令处理后写入Binlog。 
+*/
 class Cmd : public std::enable_shared_from_this<Cmd> {
  public:
   friend class PikaClientConn;
@@ -584,7 +601,21 @@ class Cmd : public std::enable_shared_from_this<Cmd> {
 
   void SetStage(CmdStage stage);
   void SetCmdId(uint32_t cmdId){cmdId_ = cmdId;}
+  
+  /*
+  https://whoiami.github.io/PIKA_DATA_PATH
 
+  DoBinlog的作用主要是将命令写入Binlog。 
+  通过 ConsensusProposeLog => InternalAppendBinlog => 
+  (std::shared_ptr<Binlog>)Logger()->Put(binlog)
+   一系列的函数调用，最终调用class Binlog的Put接口将，binlog 字符串写入Binlog 文件当中。
+
+   Binlog文件是由一个一个Blocks组成的，
+   这样组织主要防止binlog文件的某一个点损坏造成整个文件不可读。
+   每一个binlog 字符串先序列化成BinlogItem 结构，如黄色板块所示，组成BinlogItem之后，
+   再加上8个bytes（Length，Time，Type）组成完整的可以落盘的数据。
+
+  */
   virtual void DoBinlog();
 
   uint32_t GetCmdId() const { return cmdId_; };

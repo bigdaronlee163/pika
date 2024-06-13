@@ -396,6 +396,7 @@ class Redis {
   }
 
   inline bool ExpectedMetaValue(enum DataType type, const std::string &meta_value) {
+    // 第一个字节是type。
     auto meta_type = static_cast<enum DataType>(static_cast<uint8_t>(meta_value[0]));
     if (type == meta_type) {
       return true;

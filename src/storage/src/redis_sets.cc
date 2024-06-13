@@ -65,6 +65,7 @@ rocksdb::Status Redis::ScanSetsKeyNum(KeyInfo* key_info) {
 rocksdb::Status Redis::SAdd(const Slice& key, const std::vector<std::string>& members, int32_t* ret) {
   std::unordered_set<std::string> unique;
   std::vector<std::string> filtered_members;
+  // 对set进行去重。
   for (const auto& member : members) {
     if (unique.find(member) == unique.end()) {
       unique.insert(member);
