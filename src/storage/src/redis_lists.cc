@@ -58,6 +58,14 @@ Status Redis::ScanListsKeyNum(KeyInfo* key_info) {
   return Status::OK();
 }
 
+/*
+这段代码是用来在Redis中获取列表中指定索引位置的元素。
+首先会从元数据中获取列表的信息，包括版本号、左右索引等。
+然后根据传入的索引值计算出目标索引位置，并检查该位置是否在列表的范围内。
+如果在范围内，则构造列表数据的键并从数据库中获取数据，最终返回获取到的元素值。
+如果索引位置超出范围或者元数据中的信息不符合预期，则返回相应的错误状态。
+
+*/
 Status Redis::LIndex(const Slice& key, int64_t index, std::string* element) {
   rocksdb::ReadOptions read_options;
   const rocksdb::Snapshot* snapshot;
@@ -86,11 +94,15 @@ Status Redis::LIndex(const Slice& key, int64_t index, std::string* element) {
     } else if (parsed_lists_meta_value.Count() == 0) {
       return Status::NotFound();
     } else {
+      // 计算目标索引位置   索引大于0， 加载left index ; 所以小于0 ， right index 加。 表示右边的所以。
       uint64_t target_index =
           index >= 0 ? parsed_lists_meta_value.LeftIndex() + index + 1 : parsed_lists_meta_value.RightIndex() + index;
+      // 保证索引在合法的范围内。
       if (parsed_lists_meta_value.LeftIndex() < target_index && target_index < parsed_lists_meta_value.RightIndex()) {
         ListsDataKey lists_data_key(key, version, target_index);
+        // TODO(DDD): 解析rocksdb怎么获取指定返回内的数据的？
         s = db_->Get(read_options, handles_[kListsDataCF], lists_data_key.Encode(), element);
+        // element 就是返回值。
         if (s.ok()) {
           ParsedBaseDataValue parsed_value(element);
           parsed_value.StripSuffix();
@@ -238,6 +250,7 @@ Status Redis::LLen(const Slice& key, uint64_t* len, std::string&& prefetch_meta)
       }
     }
   }
+  // 果然count就是list等数据结构中元素的个数。
   if (s.ok()) {
     ParsedListsMetaValue parsed_lists_meta_value(&meta_value);
     if (parsed_lists_meta_value.IsStale()) {
@@ -310,6 +323,19 @@ Status Redis::LPop(const Slice& key, int64_t count, std::vector<std::string>* el
   return s;
 }
 
+/*
+  通过 key，获取到 BaseMetaKey base_meta_key(key); 
+
+  然后 通过 base_meta_key 获取到对应的 ListsMetaValue 用于存储list的size  左右索引。
+
+  然后修改ListsMetaValue ，并存储value
+  然后再存储 base_meta_key 
+
+  rocks 通过 rocksdb::WriteBatch batch;  来完成统一的写入。
+
+  
+
+*/
 Status Redis::LPush(const Slice& key, const std::vector<std::string>& values, uint64_t* ret) {
   *ret = 0;
   rocksdb::WriteBatch batch;
@@ -341,16 +367,23 @@ Status Redis::LPush(const Slice& key, const std::vector<std::string>& values, ui
     for (const auto& value : values) {
       index = parsed_lists_meta_value.LeftIndex();
       parsed_lists_meta_value.ModifyLeftIndex(1);
+      // 底层加 count + 1 
       parsed_lists_meta_value.ModifyCount(1);
+      // 版本信息在 key中。
       ListsDataKey lists_data_key(key, version, index);
       BaseDataValue i_val(value);
       batch.Put(handles_[kListsDataCF], lists_data_key.Encode(), i_val.Encode());
     }
+    // list对应的meta keyinfo 需要更新之后，再保存进去。
     batch.Put(handles_[kMetaCF], base_meta_key.Encode(), meta_value);
+    // push的结果，就是list列表中元素的总个数。
     *ret = parsed_lists_meta_value.Count();
   } else if (s.IsNotFound()) {
+    // 这是一个新的list的key 
     char str[8];
+    // 使用size创建一个key？ 
     EncodeFixed64(str, values.size());
+    // 创建slice, 里面有
     ListsMetaValue lists_meta_value(Slice(str, sizeof(uint64_t)));
     version = lists_meta_value.UpdateVersion();
     for (const auto& value : values) {
@@ -358,8 +391,10 @@ Status Redis::LPush(const Slice& key, const std::vector<std::string>& values, ui
       lists_meta_value.ModifyLeftIndex(1);
       ListsDataKey lists_data_key(key, version, index);
       BaseDataValue i_val(value);
+      // 将数据存到 lists_data_key 中。 
       batch.Put(handles_[kListsDataCF], lists_data_key.Encode(), i_val.Encode());
     }
+    // 列簇是  kMetaCF   这个 base_meta_key 跟list的key相关。  lists_meta_value
     batch.Put(handles_[kMetaCF], base_meta_key.Encode(), lists_meta_value.Encode());
     *ret = lists_meta_value.RightIndex() - lists_meta_value.LeftIndex() - 1;
   } else {
@@ -417,10 +452,11 @@ Status Redis::LRange(const Slice& key, int64_t start, int64_t stop, std::vector<
 
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
-
+  // 这里是获取meta_value ? 
   std::string meta_value;
   BaseMetaKey base_meta_key(key);
   Status s = db_->Get(read_options, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
+  // 这里没有直接解析 meta_value ，而是通过获取其那面一个字节，来判断，是否是对应的类型和是否过期。
   if (s.ok() && !ExpectedMetaValue(DataType::kLists, meta_value)) {
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
@@ -432,6 +468,7 @@ Status Redis::LRange(const Slice& key, int64_t start, int64_t stop, std::vector<
     }
   }
   if (s.ok()) {
+    // list的meta信息。包含list_size left index 和 right index 
     ParsedListsMetaValue parsed_lists_meta_value(&meta_value);
     if (parsed_lists_meta_value.IsStale()) {
       return Status::NotFound("Stale");
@@ -446,6 +483,12 @@ Status Redis::LRange(const Slice& key, int64_t start, int64_t stop, std::vector<
 
       if (sublist_left_index > sublist_right_index || sublist_left_index > origin_right_index ||
           sublist_right_index < origin_left_index) {
+        // 不合法的索引返回为什么是返回 OK？ 
+        /*
+        redis验证， 索引使用错误，返回空
+        127.0.0.1:6379> lrange  mylist  3 1  
+        (empty array)
+        */
         return Status::OK();
       } else {
         if (sublist_left_index < origin_left_index) {
@@ -454,12 +497,15 @@ Status Redis::LRange(const Slice& key, int64_t start, int64_t stop, std::vector<
         if (sublist_right_index > origin_right_index) {
           sublist_right_index = origin_right_index;
         }
+        // 根据有效的索引进行遍历。
         rocksdb::Iterator* iter = db_->NewIterator(read_options, handles_[kListsDataCF]);
         uint64_t current_index = sublist_left_index;
         ListsDataKey start_data_key(key, version, current_index);
         for (iter->Seek(start_data_key.Encode()); iter->Valid() && current_index <= sublist_right_index;
              iter->Next(), current_index++) {
+          // 获取rocksdb中的数据,并解析。
           ParsedBaseDataValue parsed_value(iter->value());
+          // 
           ret->push_back(parsed_value.UserValue().ToString());
         }
         delete iter;

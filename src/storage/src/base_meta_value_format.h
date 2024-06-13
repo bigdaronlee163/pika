@@ -199,9 +199,14 @@ class ParsedBaseMetaValue : public ParsedInternalValue {
   */
  // 这里计算后面的四个字节的长度。
   static const size_t kBaseMetaValueSuffixLength = kVersionLength + kSuffixReserveLength + 2 * kTimestampLength;
+  // 这边增加了一个count_ 的字段。 【这个字段就是计算数据结构中元素的个数。】
+  //  `count_` 字段是一个整型变量，用来存储某种计数或数量的值。
+  // 它可以用来跟踪某个对象、事件或状态发生的次数。通过增加 `count_` 字段，
+  // 可以方便地记录和追踪某个特定属性的数量，从而在程序中进行相应的逻辑处理或统计分析。
   int32_t count_ = 0;
 };
 
+// hash set zset 使用这里的value的定义。
 using HashesMetaValue = BaseMetaValue;
 using ParsedHashesMetaValue = ParsedBaseMetaValue;
 using SetsMetaValue = BaseMetaValue;

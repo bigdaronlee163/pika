@@ -76,6 +76,8 @@ class PikaClientConn : public net::RedisConn {
 
   bool IsInterceptedByRTC(std::string& opt);
 
+  // net 层通过 ProcessRedisCmds的调用，Pika上层可以自己定义对于接受命令后的后续处理流程。
+  // 可以定义是异步还是同步。
   void ProcessRedisCmds(const std::vector<net::RedisCmdArgsType>& argvs, bool async, std::string* response) override;
 
   bool ReadCmdInCache(const net::RedisCmdArgsType& argv, const std::string& opt);

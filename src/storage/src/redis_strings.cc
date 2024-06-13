@@ -329,6 +329,7 @@ Status Redis::Get(const Slice& key, std::string* value) {
   BaseKey base_key(key);
   Status s = db_->Get(default_read_options_, base_key.Encode(), value);
   std::string meta_value = *value;
+  // 抓住主要思路。
   if (s.ok() && !ExpectedMetaValue(DataType::kStrings, meta_value)) {
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
@@ -345,6 +346,7 @@ Status Redis::Get(const Slice& key, std::string* value) {
       value->clear();
       return Status::NotFound("Stale");
     } else {
+      // 保证只剩下 redis中value的部分。 移除value前后的元信息，也就是前后缀。
       parsed_strings_value.StripSuffix();
     }
   }

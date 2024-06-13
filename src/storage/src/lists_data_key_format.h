@@ -10,7 +10,8 @@
 #include "storage/storage_define.h"
 
 namespace storage {
-/*
+/* 
+* 这个是list的key，不是value.
 * used for List data key. format:
 * | reserve1 | key | version | index | reserve2 |
 * |    8B    |     |    8B   |   8B  |   16B    |
