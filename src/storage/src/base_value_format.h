@@ -23,14 +23,20 @@ constexpr int DataTypeNum = int(DataType::kNones);
 
 constexpr char DataTypeTag[] = { 'k', 'h', 's', 'l', 'z', 'x', 'n', 'a'};
 constexpr char* DataTypeStrings[] = { "string", "hash", "set", "list", "zset", "streams", "none", "all"};
-
+// 通过将枚举类 DataType 转成可读性更好的字符串，来方便调试。
 constexpr char* DataTypeToString(DataType type) {
   if (type < DataType::kStrings || type > DataType::kNones) {
     return DataTypeStrings[static_cast<int>(DataType::kNones)];
   }
   return DataTypeStrings[static_cast<int>(type)];
 }
-
+// 通过将 DataType 转成可读性更好的 tag 字符，来方便调试。
+constexpr char* DataTypeToTagString(DataType type) {
+  if (type < DataType::kStrings || type > DataType::kNones) {
+    return DataTypeTag[static_cast<int>(DataType::kNones)];
+  }
+  return DataTypeTag[static_cast<int>(type)];
+}
 constexpr char DataTypeToTag(DataType type) {
   if (type < DataType::kStrings || type > DataType::kNones) {
     return DataTypeTag[static_cast<int>(DataType::kNones)];
@@ -51,6 +57,7 @@ public:
   }
   void SetEtime(uint64_t etime = 0) { etime_ = etime; }
   void setCtime(uint64_t ctime) { ctime_ = ctime; }
+  // 设置过期时间。
   rocksdb::Status SetRelativeTimestamp(int64_t ttl) {
     int64_t unix_time;
     rocksdb::Env::Default()->GetCurrentTime(&unix_time);
@@ -130,7 +137,7 @@ public:
   }
 
   bool IsPermanentSurvival() { return etime_ == 0; }
-
+  // 判断健是否过期。通过etime是否小于当前的时间（相对时间和绝对时间，都是通过对比过期的时间和当前时间的大小。）  
   bool IsStale() {
     if (etime_ == 0) {
       return false;

@@ -412,6 +412,7 @@ class Redis {
       case DataType::kZSets:
       case DataType::kSets:
       case DataType::kHashes: {
+        // parsed_meta_value 不是一个函数，这是一个构造函数。奶奶的。
         ParsedBaseMetaValue parsed_meta_value(meta_value);
         return (parsed_meta_value.IsStale() || parsed_meta_value.Count() == 0);
       }
