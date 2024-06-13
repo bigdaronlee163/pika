@@ -27,14 +27,17 @@ class BaseMetaValue : public InternalValue {
   explicit BaseMetaValue(DataType type, const Slice& user_value) : InternalValue(type, user_value) {}
   rocksdb::Slice Encode() override {
     size_t usize = user_value_.size();
+    // kSuffixReserveLength 对应于上面的 reserve 。是16个字节。【比redis还是浪费空间一些。 但是pika用的事磁盘。】
     size_t needed = usize + kVersionLength + kSuffixReserveLength + 2 * kTimestampLength + kTypeLength;
     char* dst = ReAllocIfNeeded(needed);
+    // 将type 复制到指定的dst地址开始的内存。并且增加dst. 然后再按着顺序copy。
     memcpy(dst, &type_, sizeof(type_));
     dst += sizeof(type_);
     char* start_pos = dst;
 
     memcpy(dst, user_value_.data(), user_value_.size());
     dst += user_value_.size();
+    // EncodeFixed64 也区分大小端。 
     EncodeFixed64(dst, version_);
     dst += sizeof(version_);
     memcpy(dst, reserve_, sizeof(reserve_));
@@ -60,10 +63,13 @@ class ParsedBaseMetaValue : public ParsedInternalValue {
  public:
   // Use this constructor after rocksdb::DB::Get();
   explicit ParsedBaseMetaValue(std::string* internal_value_str) : ParsedInternalValue(internal_value_str) {
+    // 在这里对value按照内存进行解析。
     if (internal_value_str->size() >= kBaseMetaValueSuffixLength) {
       size_t offset = 0;
+      // 第一个字节。
       type_ = static_cast<DataType>(static_cast<uint8_t>((*internal_value_str)[0]));
       offset += kTypeLength;
+      // 用户的value从[internal_value_str->data() + offset， internal_value_str->size() - kBaseMetaValueSuffixLength - offset]
       user_value_ = Slice(internal_value_str->data() + offset,
                              internal_value_str->size() - kBaseMetaValueSuffixLength - offset);
       offset += user_value_.size();
@@ -183,6 +189,11 @@ class ParsedBaseMetaValue : public ParsedInternalValue {
   }
 
  private:
+  /*
+  *| type | value |  version | reserve | cdate | timestamp |
+  *|  1B  |       |    8B   |   16B    |   8B  |     8B    |
+  */
+ // 这里计算后面的四个字节的长度。
   static const size_t kBaseMetaValueSuffixLength = kVersionLength + kSuffixReserveLength + 2 * kTimestampLength;
   int32_t count_ = 0;
 };
