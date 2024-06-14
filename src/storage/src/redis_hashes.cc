@@ -709,7 +709,7 @@ Status Redis::HSet(const Slice& key, const Slice& field, const Slice& value, int
   uint64_t version = 0;
   uint32_t statistic = 0;
   std::string meta_value;
-
+  // hash 使用BaseMetaKey
   BaseMetaKey base_meta_key(key);
   Status s = db_->Get(default_read_options_, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
   char meta_value_buf[4] = {0};

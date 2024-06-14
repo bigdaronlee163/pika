@@ -77,7 +77,7 @@ rocksdb::Status Redis::SAdd(const Slice& key, const std::vector<std::string>& me
   ScopeRecordLock l(lock_mgr_, key);
   uint64_t version = 0;
   std::string meta_value;
-
+  // set 使用BaseMetaKey
   BaseMetaKey base_meta_key(key);
   rocksdb::Status s = db_->Get(default_read_options_, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
   if (s.ok() && !ExpectedMetaValue(DataType::kSets, meta_value)) {

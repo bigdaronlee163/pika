@@ -91,7 +91,7 @@ class ParsedBaseKey {
 protected:
   std::string key_str_;
 };
-
+// 估计hash set等也是将key包装乘meta key 然后从db获取对应key的元数据的。
 using ParsedBaseMetaKey = ParsedBaseKey;
 using BaseMetaKey = BaseKey;
 
