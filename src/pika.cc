@@ -143,7 +143,7 @@ static void usage() {
           version);
 }
 
-int main(int argc, char* argv[]) {
+ int main(int argc, char* argv[]) {
   if (argc != 2 && argc != 3) {
     usage();
     exit(-1);

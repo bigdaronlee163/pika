@@ -64,7 +64,6 @@ Status Redis::ScanListsKeyNum(KeyInfo* key_info) {
 然后根据传入的索引值计算出目标索引位置，并检查该位置是否在列表的范围内。
 如果在范围内，则构造列表数据的键并从数据库中获取数据，最终返回获取到的元素值。
 如果索引位置超出范围或者元数据中的信息不符合预期，则返回相应的错误状态。
-
 */
 Status Redis::LIndex(const Slice& key, int64_t index, std::string* element) {
   rocksdb::ReadOptions read_options;
@@ -84,6 +83,7 @@ Status Redis::LIndex(const Slice& key, int64_t index, std::string* element) {
     }
   }
   if (s.ok()) {
+    // list的 meta value比较简单，除了必要的版本时间戳元信息，剩下的就是左右index以及list元素的个数。
     ParsedListsMetaValue parsed_lists_meta_value(&meta_value);
     uint64_t version = parsed_lists_meta_value.Version();
     if (parsed_lists_meta_value.IsStale()) {

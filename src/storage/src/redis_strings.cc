@@ -1471,6 +1471,7 @@ rocksdb::Status Redis::Exists(const Slice& key) {
 
 rocksdb::Status Redis::Del(const Slice& key) {
   std::string meta_value;
+  // string 使用BaseMetaKey
   BaseMetaKey base_meta_key(key);
   rocksdb::Status s = db_->Get(default_read_options_, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
   if (s.ok()) {

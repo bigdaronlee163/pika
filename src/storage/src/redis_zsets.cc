@@ -1769,6 +1769,7 @@ Status Redis::ZScan(const Slice& key, int64_t cursor, const std::string& pattern
 
 Status Redis::ZsetsPersist(const Slice& key) {
   std::string meta_value;
+  // zset 使用BaseMetaKey
   BaseMetaKey base_meta_key(key);
   ScopeRecordLock l(lock_mgr_, key);
 
