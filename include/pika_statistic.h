@@ -62,4 +62,11 @@ struct DiskStatistic {
   std::atomic<uint64_t> log_size_ = 0;
 };
 
+struct  CmdStatistic{
+
+
+
+};
+
+
 #endif  // PIKA_STATISTIC_H_
