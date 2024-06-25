@@ -211,6 +211,17 @@ std::shared_ptr<Cmd> PikaClientConn::DoCmd(const PikaCmdArgsType& argv, const st
   if (g_pika_conf->slowlog_slower_than() >= 0) {
     ProcessSlowlog(argv, c_ptr->GetDoDuration());
   }
+  // DDD 如果开启动态调整快慢命令
+  if(g_pika_conf->slowlog_slower_than()){
+    if (getDuration() > g_pika_conf->slowlog_slower_than()){
+      c_ptr->state.threshold = c_ptr->state.threshold + 1。
+    }
+    if(c_ptr->state.threshold > 12 ){
+      // 添加进入cmd
+    } else {
+      // 从slow cmd中删除。
+    }
+  }
 
   return c_ptr;
 }
@@ -304,6 +315,11 @@ void PikaClientConn::BatchExecRedisCmd(const std::vector<net::RedisCmdArgsType>&
     ExecRedisCmd(argv, resp_ptr);
   }
   time_stat_->process_done_ts_ = pstd::NowMicros();
+  // 这里怎么获取cmd。只有。
+  // 这里有cmd信息。没法用到cmd中本身的信息。
+  if(time_stat_->process_done_ts_ > g_pika_conf process_time())
+  
+
   TryWriteResp();
 }
 
@@ -436,7 +452,7 @@ void PikaClientConn::ExecRedisCmd(const PikaCmdArgsType& argv, std::shared_ptr<s
       pstd::StringToLower(opt);
     }
   }
-
+  // DDD 这里是
   std::shared_ptr<Cmd> cmd_ptr = DoCmd(argv, opt, resp_ptr);
   *resp_ptr = std::move(cmd_ptr->res().message());
   resp_num--;

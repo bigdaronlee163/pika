@@ -62,9 +62,24 @@ struct DiskStatistic {
   std::atomic<uint64_t> log_size_ = 0;
 };
 
+
+
+struct CmdStatistics{
+  // 对map的操作，需要加锁。
+  std::map<std::string, CmdStatistic> cmdStatistics;
+  // 慢命令的统计时间阈值
+  // 从配置冲读取。
+  uint64_t slow_threshold_once;
+  uint64_t slow_threshold_N;
+  uint64_t slow_threshold_window_mean;
+  uint64_t slow_threshold_window_N;
+
+   
+};
+
 struct  CmdStatistic{
 
-
+  
 
 };
 
