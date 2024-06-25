@@ -62,9 +62,47 @@ struct DiskStatistic {
   std::atomic<uint64_t> log_size_ = 0;
 };
 
+
+
+struct CmdStatistics{
+  std::map<std::string, CmdStatistic> cmdStatistics;
+  // 慢命令的统计时间阈值
+  uint64_t slow_threshold_once;
+  uint64_t slow_threshold_N;
+  uint64_t slow_threshold_window_mean;
+  uint64_t slow_threshold_window_N;
+
+   
+};
+
 struct  CmdStatistic{
+  //  std::map<std::string, >
+  // 统计的时候，就计算。
+  // 在下次执行的时候，就判断是否为慢命令。如果是就将其加入慢队列的命令中。
+  std::string cmd;
+  uint64_t cmd_count;
+  uint64_t fist_time;
+  uint64_t last_time;
+  uint64_t window_time;
+
+  uint64_t slow_once;
+  uint64_t slow_N;
+  uint64_t slow_window_N;
+  uint64_t slow_window_mean;
 
 
+  // 0000 0000
+  // slow_window_mean slow_window_N slow_N slow_once
+  // 总共是四个条件，如果有一个条件达到就将 threshold 对应的低位置1
+  // 然后如果 threshold >= 12（ （0000 1111) ->  15） 12/15 = 0.8 就将其加入慢命令列表。
+  // 如果后续不满足就将其剔除。
+  /*
+  1. 如果最新的一次slow_once 没有超出阈值，则 threshold 减1 剩 14 。
+  2. 如果slow_N不满足， threshold 减 2 剩 13
+  3. slow_window_mean 不满足  threshold 减 4 剩 11
+  * 可以保证，不会窗口时间内，反复将一个命令调整成慢命令或者快命令。
+  */
+  uint8_t threshold;
 
 };
 
