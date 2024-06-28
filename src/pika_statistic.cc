@@ -43,6 +43,7 @@ void QpsStatistic::ResetLastSecQuerynum() {
   uint64_t cur_query = querynum.load();
   uint64_t cur_write_query = write_querynum.load();
   uint64_t last_time = last_time_us.load();
+  // 可能在赋值之后，有存在更新的情况。
   if (cur_write_query < last_write_query) {
     cur_write_query = last_write_query;
   }
@@ -55,6 +56,7 @@ void QpsStatistic::ResetLastSecQuerynum() {
   if (cur_time_us <= last_time) {
     cur_time_us = last_time + 1;
   }
+  // 计算上一秒的读写的查询次数。
   uint64_t delta_time_us = cur_time_us - last_time;
   last_sec_querynum.store(delta_query * 1000000 / (delta_time_us));
   last_sec_write_querynum.store(delta_write_query * 1000000 / (delta_time_us));
@@ -108,4 +110,25 @@ void Statistic::ResetDBLastSecQuerynum() {
   for (auto& stat : db_stat) {
     stat.second.ResetLastSecQuerynum();
   }
+}
+
+// 使用最普通的实现方法。 
+CmdStatistic::CmdStatistic(){
+
+}
+// 
+CmdStatistic::CmdStatistic(const CmdStatistic& other){
+
+}
+//
+
+void CmdStatistic::UpdateCmdFastOrSlowStatus(std::string cmd_name, uint64_t exec_time){
+  auto now = pstd::NowMicros();
+  if(now - cmdStatistics[cmd_name].fist_time > window_time){
+
+
+    
+  }
+waqqaswqaaaaaa  
+
 }
