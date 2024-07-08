@@ -106,6 +106,7 @@ struct  CmdStatistic{
   * 可以保证，不会窗口时间内，反复将一个命令调整成慢命令或者快命令。
   */
   uint8_t threshold;
+
 };
 
 
