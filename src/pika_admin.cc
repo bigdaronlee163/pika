@@ -1241,7 +1241,7 @@ void InfoCmd::InfoKeyspace(std::string& info) {
 void InfoCmd::InfoData(std::string& info) {
   std::stringstream tmp_stream;
   std::stringstream db_fatal_msg_stream;
-
+  // 这两个有什么区别？ 
   uint64_t db_size = g_pika_server->GetDBSize();
   uint64_t log_size = g_pika_server->GetLogSize();
 
@@ -1251,11 +1251,14 @@ void InfoCmd::InfoData(std::string& info) {
   tmp_stream << "db_size_human:" << (db_size >> 20) << "M\r\n";
   tmp_stream << "log_size:" << log_size << "\r\n";
   tmp_stream << "log_size_human:" << (log_size >> 20) << "M\r\n";
+  // pika的压缩率。
   tmp_stream << "compression:" << g_pika_conf->compression() << "\r\n";
 
   // rocksdb related memory usage
   std::map<int, uint64_t> background_errors;
   uint64_t total_background_errors = 0;
+  // memtable 是啥？ 
+  // table reader 是啥？ 
   uint64_t total_memtable_usage = 0;
   uint64_t total_table_reader_usage = 0;
   uint64_t memtable_usage = 0;
@@ -1267,6 +1270,7 @@ void InfoCmd::InfoData(std::string& info) {
     }
     background_errors.clear();
     memtable_usage = table_reader_usage = 0;
+    // 共享锁。 
     db_item.second->DBLockShared();
     db_item.second->storage()->GetUsage(storage::PROPERTY_TYPE_ROCKSDB_CUR_SIZE_ALL_MEM_TABLES, &memtable_usage);
     db_item.second->storage()->GetUsage(storage::PROPERTY_TYPE_ROCKSDB_ESTIMATE_TABLE_READER_MEM, &table_reader_usage);
@@ -1282,7 +1286,10 @@ void InfoCmd::InfoData(std::string& info) {
       }
     }
   }
-
+  // memory 
+  // memtable
+  // tablereader 
+  // 都是啥？ 
   tmp_stream << "used_memory:" << (total_memtable_usage + total_table_reader_usage) << "\r\n";
   tmp_stream << "used_memory_human:" << ((total_memtable_usage + total_table_reader_usage) >> 20) << "M\r\n";
   tmp_stream << "db_memtable_usage:" << total_memtable_usage << "\r\n";
