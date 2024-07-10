@@ -1761,7 +1761,8 @@ double PikaServer::HitRatio(void) {
   }
   return hits / (all_cmds * 1.0);
 }
-
+// 从这里可以看到，每个db都有一个redis的cache，并且可以通过
+// db 中的 DisplayCacheInfo GetCacheInfo(); 获取内存的使用情况。
 void PikaServer::UpdateCacheInfo(void) {
   for (auto& dbs : dbs_) {
     if (PIKA_CACHE_STATUS_OK != dbs.second->cache()->CacheStatus()) {
