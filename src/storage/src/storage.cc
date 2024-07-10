@@ -1821,7 +1821,9 @@ Status Storage::GetUsage(const std::string& property, std::map<int, uint64_t>* c
   }
   return Status::OK();
 }
-
+// 底层调用的方法，都是这个 GetProperty 。 
+// inst 就是rocksdb。
+// 怎么测试呢？ 
 uint64_t Storage::GetProperty(const std::string& property) {
   uint64_t out = 0;
   uint64_t result = 0;
