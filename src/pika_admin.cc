@@ -1272,6 +1272,7 @@ void InfoCmd::InfoData(std::string& info) {
     memtable_usage = table_reader_usage = 0;
     // 共享锁。 
     db_item.second->DBLockShared();
+    // 看看这里是怎么调用的，blockcache应该也是使用同样的方法。 
     db_item.second->storage()->GetUsage(storage::PROPERTY_TYPE_ROCKSDB_CUR_SIZE_ALL_MEM_TABLES, &memtable_usage);
     db_item.second->storage()->GetUsage(storage::PROPERTY_TYPE_ROCKSDB_ESTIMATE_TABLE_READER_MEM, &table_reader_usage);
     db_item.second->storage()->GetUsage(storage::PROPERTY_TYPE_ROCKSDB_BACKGROUND_ERRORS, &background_errors);

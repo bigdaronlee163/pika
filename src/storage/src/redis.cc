@@ -285,6 +285,7 @@ void Redis::GetRocksDBInfo(std::string& info, const char* prefix) {
     };
 
     // memtables num
+    // 这里定义了一些rocksdb的一些配置属性。 
     write_stream_key_value(rocksdb::DB::Properties::kNumImmutableMemTable, "num_immutable_mem_table");
     write_stream_key_value(rocksdb::DB::Properties::kNumImmutableMemTableFlushed, "num_immutable_mem_table_flushed");
     write_stream_key_value(rocksdb::DB::Properties::kMemTableFlushPending, "mem_table_flush_pending");
@@ -326,6 +327,8 @@ void Redis::GetRocksDBInfo(std::string& info, const char* prefix) {
     write_stream_key_value(rocksdb::DB::Properties::kEstimatePendingCompactionBytes, "estimate_pending_compaction_bytes");
 
     // block cache
+    // rocksdb中的 blockcache是啥？ 
+    // 基本这两个都找到了。 
     write_stream_key_value(rocksdb::DB::Properties::kBlockCacheCapacity, "block_cache_capacity");
     write_stream_key_value(rocksdb::DB::Properties::kBlockCacheUsage, "block_cache_usage");
     write_stream_key_value(rocksdb::DB::Properties::kBlockCachePinnedUsage, "block_cache_pinned_usage");

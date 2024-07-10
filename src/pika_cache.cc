@@ -86,6 +86,7 @@ void PikaCache::Info(CacheInfo &info) {
   std::unique_lock l(rwlock_);
   info.status = cache_status_;
   info.cache_num = cache_num_;
+  // 可以通过这个方法，获取redis cache使用的内存。
   info.used_memory = cache::RedisCache::GetUsedMemory();
   info.async_load_keys_num = cache_load_thread_->AsyncLoadKeysNum();
   info.waitting_load_keys_num = cache_load_thread_->WaittingLoadKeysNum();
