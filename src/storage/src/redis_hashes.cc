@@ -58,46 +58,72 @@ Status Redis::ScanHashesKeyNum(KeyInfo* key_info) {
   key_info->invaild_keys = invaild_keys;
   return Status::OK();
 }
-
+/*
+-  key ：要操作的哈希键。 
+-  fields ：要删除的字段列表。 
+-  ret ：指向一个整数的指针，用于返回实际删除的字段数量。 
+*/
 Status Redis::HDel(const Slice& key, const std::vector<std::string>& fields, int32_t* ret) {
+  /*
+  -  statistic ：用于统计删除操作的数量。 
+  -  filtered_fields ：存储去重后的字段列表。 
+  -  field_set ：用于快速查找和去重字段。
+  */
   uint32_t statistic = 0;
   std::vector<std::string> filtered_fields;
   std::unordered_set<std::string> field_set;
   for (const auto & iter : fields) {
     const std::string& field = iter;
     if (field_set.find(field) == field_set.end()) {
-      field_set.insert(field);
+      field_set.insert(field); // set去除重复的字段。
       filtered_fields.push_back(iter);
     }
   }
-
+  /*
+  初始化 RocksDB 批处理
+  -  batch ：用于批量写入操作。 
+  -  read_options ：设置读取选项。 
+  -  snapshot ：用于快照读取。 
+  -  meta_value ：存储元数据的值。 
+  -  del_cnt ：计数器，用于统计删除的字段数量。 
+  -  version ：哈希的版本号。 
+  */
   rocksdb::WriteBatch batch;
+  // 把go-redis过了一遍之后，发生代码看着更加亲切了。
   rocksdb::ReadOptions read_options;
   const rocksdb::Snapshot* snapshot;
 
   std::string meta_value;
   int32_t del_cnt = 0;
   uint64_t version = 0;
+  // - 使用作用域锁定和快照，以确保在操作期间数据的一致性。 
+  // 
   ScopeRecordLock l(lock_mgr_, key);
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
 
   BaseMetaKey base_meta_key(key);
   Status s = db_->Get(read_options, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
+  // 如果可以获取到，但是key的类型不是hash。
   if (s.ok() && !ExpectedMetaValue(DataType::kHashes, meta_value)) {
+    // 如果过期了，就证明这个key是不存在的。 
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
-    } else {
+    } else { // 如果没有过期，就返回类型不对的错误。
       return Status::InvalidArgument(
         "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
         DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
         DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
+  // 
   if (s.ok()) {
+    // - 解析元数据，如果数据过期或计数为零，则直接返回。 
+    // meta_value 里面包含了 key 的版本信息。
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
     if (parsed_hashes_meta_value.IsStale() || parsed_hashes_meta_value.Count() == 0) {
       *ret = 0;
+      // 
       return Status::OK();
     } else {
       std::string data_value;

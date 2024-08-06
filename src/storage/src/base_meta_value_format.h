@@ -59,6 +59,10 @@ class BaseMetaValue : public InternalValue {
 class ParsedBaseMetaValue : public ParsedInternalValue {
  public:
   // Use this constructor after rocksdb::DB::Get();
+  /*
+  
+  
+  */
   explicit ParsedBaseMetaValue(std::string* internal_value_str) : ParsedInternalValue(internal_value_str) {
     if (internal_value_str->size() >= kBaseMetaValueSuffixLength) {
       size_t offset = 0;
