@@ -63,6 +63,14 @@ class ParsedBaseMetaValue : public ParsedInternalValue {
  public:
   // Use this constructor after rocksdb::DB::Get();
   /*
+   - 该构造函数在从 RocksDB 中获取数据后使用。它接收一个指向字符串的指针，解析该字符串以提取元数据。 
+   - 解析过程包括提取数据类型、用户值、版本、创建时间（ctime）、结束时间（etime）等字段。
+
+    -  count_ ：表示与该元数据相关的元素数量。 
+    -  version_ ：表示元数据的版本号。 
+    -  user_value_ ：存储用户值的切片。 
+    -  ctime_  和  etime_ ：分别表示创建时间和结束时间的时间戳。 
+    -  reserve_ ：保留字段，用于存储额外的信息。 
   
   
   */
@@ -89,6 +97,9 @@ class ParsedBaseMetaValue : public ParsedInternalValue {
   }
 
   // Use this constructor in rocksdb::CompactionFilter::Filter();
+  /*
+  - 该构造函数在 RocksDB 的压缩过滤器中使用，接收一个  Slice  对象（一个轻量级的只读字符串视图），以类似的方式解析元数据。 
+  */
   explicit ParsedBaseMetaValue(const Slice& internal_value_slice) : ParsedInternalValue(internal_value_slice) {
     if (internal_value_slice.size() >= kBaseMetaValueSuffixLength) {
       size_t offset = 0;

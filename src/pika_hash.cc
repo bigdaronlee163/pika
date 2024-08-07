@@ -214,6 +214,8 @@ void HExistsCmd::DoInitial() {
 }
 
 void HExistsCmd::Do() {
+  // 从rocksdb读取内容之后，根据s中的内容，判断是否存在。
+  // 然后返回符合redis协议的响应。
   s_ = db_->storage()->HExists(key_, field_);
   if (s_.ok()) {
     res_.AppendContent(":1");

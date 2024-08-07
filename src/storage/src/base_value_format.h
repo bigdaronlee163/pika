@@ -58,6 +58,7 @@ public:
   void SetEtime(uint64_t etime = 0) { etime_ = etime; }
   void setCtime(uint64_t ctime) { ctime_ = ctime; }
   // 设置过期时间。
+  // 这个可以用在hash的过期实现上面。
   rocksdb::Status SetRelativeTimestamp(int64_t ttl) {
     int64_t unix_time;
     rocksdb::Env::Default()->GetCurrentTime(&unix_time);

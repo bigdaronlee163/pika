@@ -81,7 +81,7 @@ class Redis {
       return modify_count;
     }
   };
-
+  // 利用构造函数和析构函数，统计key的执行的时间。
   struct KeyStatisticsDurationGuard {
     Redis* ctx;
     std::string key;
