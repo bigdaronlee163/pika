@@ -814,6 +814,42 @@ Status Redis::HSetnx(const Slice& key, const Slice& field, const Slice& value, i
   return db_->Write(default_write_options_, &batch);
 }
 
+  Status HExpire(const Slice& key, const Slice& field, int32_t ttl){
+
+    return Status::OK();
+  }
+
+
+
+  // Status HExpireat(const Slice& key, const Slice& field, int32_t timestamp){
+  // }
+
+  // Status HExpireTime(const Slice& key, const Slice& field){
+
+  // }
+
+  // Status HPExpire(const Slice& key, const Slice& field, int32_t ttl){
+  // }
+
+  // Status HPExpireat(const Slice& key, const Slice& field, int32_t timestamp){
+  // }
+
+  // Status HPExpireTime(const Slice& key, const Slice& field){
+  // }
+
+
+  // Status HPersist(const Slice& key, const Slice& field){
+  // }
+
+  // Status HTTL(const Slice& key, const Slice& field){
+  // }
+
+  // Status HPTTL(const Slice& key, const Slice& field){
+  // }
+
+
+
+
 Status Redis::HVals(const Slice& key, std::vector<std::string>* values) {
   rocksdb::ReadOptions read_options;
   const rocksdb::Snapshot* snapshot;
