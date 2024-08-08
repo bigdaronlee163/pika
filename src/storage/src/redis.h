@@ -207,6 +207,7 @@ class Redis {
   Status HMSet(const Slice& key, const std::vector<FieldValue>& fvs);
   Status HSet(const Slice& key, const Slice& field, const Slice& value, int32_t* res);
   Status HSetnx(const Slice& key, const Slice& field, const Slice& value, int32_t* ret);
+  Status HExpire(const Slice& key,int32_t sec, int32_t numfields, const std::vector<std::string>& fields, int32_t* ret);
   Status HVals(const Slice& key, std::vector<std::string>* values);
   Status HStrlen(const Slice& key, const Slice& field, int32_t* len);
   Status HScan(const Slice& key, int64_t cursor, const std::string& pattern, int64_t count,

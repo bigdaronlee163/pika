@@ -454,6 +454,10 @@ void InitCmdTable(CmdTable* cmd_table) {
   std::unique_ptr<Cmd> pkhrscanrangeptr = std::make_unique<PKHRScanRangeCmd>(
       kCmdNamePKHRScanRange, -4, kCmdFlagsRead |  kCmdFlagsHash | kCmdFlagsSlow);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHRScanRange, std::move(pkhrscanrangeptr)));
+  ////HExpire
+    std::unique_ptr<Cmd> hexpireptr = std::make_unique<HExpireCmd>(
+      kCmdNameHExpire, -4, kCmdFlagsWrite |  kCmdFlagsHash | kCmdFlagsFast);
+  cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNameHExpire, std::move(hexpireptr)));
 
   // List
   std::unique_ptr<Cmd> lindexptr =

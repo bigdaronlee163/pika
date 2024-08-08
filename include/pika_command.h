@@ -136,6 +136,15 @@ const std::string kCmdNameHScan = "hscan";
 const std::string kCmdNameHScanx = "hscanx";
 const std::string kCmdNamePKHScanRange = "pkhscanrange";
 const std::string kCmdNamePKHRScanRange = "pkhrscanrange";
+const std::string kCmdNameHExpire = "hexpire";
+const std::string kCmdNameHExpireat = "hexpireat";
+const std::string kCmdNameHExpireTime = "hexpiretime";
+const std::string kCmdNameHPExpire = "hpexpire";
+const std::string kCmdNameHPExpireat = "hpexpireat";
+const std::string kCmdNameHPExpireTime = "hpexpiretime";
+const std::string kCmdNameHPersist = "hpersist";
+const std::string kCmdNameHTTL = "httl";
+const std::string kCmdNameHPTTL = "hpttl";
 
 // List
 const std::string kCmdNameLIndex = "lindex";

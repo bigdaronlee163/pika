@@ -883,3 +883,47 @@ void PKHRScanRangeCmd::Do() {
     res_.SetRes(CmdRes::kErrOther, s_.ToString());
   }
 }
+
+
+
+void HExpireCmd::DoInitial() {
+  if (!CheckArg(argv_.size())) {
+    res_.SetRes(CmdRes::kWrongNum, kCmdNameHExpire);
+    return;
+  }
+  key_ = argv_[1];
+  auto iter = argv_.begin();
+  iter++;
+  // key
+  iter++;
+  // ttl
+  if (pstd::string2int(argv_[2].data(), argv_[2].size(), &sec_) == 0) {
+    res_.SetRes(CmdRes::kInvalidInt);
+    return;
+  }
+  // todo: 先不实现 nx xx lt gt 完成主体，后面再健 issue 
+
+  // FIELDS
+  iter++;
+  // numfields_
+  if (pstd::string2int(argv_[4].data(), argv_[4].size(), &numfields_) == 0) {
+    res_.SetRes(CmdRes::kInvalidInt);
+    return;
+  }
+
+  // fields
+  fields_.assign(iter, argv_.end());
+}
+
+void HExpireCmd::Do() {
+  int32_t ret = 0;
+  s_ = db_->storage()->HExpire(key_, sec_, numfields_, fields_, &ret);
+  if (s_.ok()) {
+    res_.AppendContent(":" + std::to_string(ret));
+    // AddSlotKey("h", key_, db_);
+  } else if (s_.IsInvalidArgument()) {
+    res_.SetRes(CmdRes::kMultiKey);
+  } else {
+    res_.SetRes(CmdRes::kErrOther, s_.ToString());
+  }
+}
