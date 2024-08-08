@@ -347,6 +347,20 @@ class Storage {
   // already exists, this operation has no effect.
   Status HSetnx(const Slice& key, const Slice& field, const Slice& value, int32_t* ret);
 
+
+  Status HExpire(const Slice& key,int32_t sec, int32_t numfields, const std::vector<std::string>& fields, int32_t* ret);
+  // Status HExpireat(const Slice& key, const Slice& field, int32_t timestamp);
+  // Status HExpireTime(const Slice& key, const Slice& field);
+
+  // Status HPExpire(const Slice& key, const Slice& field, int32_t ttl);
+  // Status HPExpireat(const Slice& key, const Slice& field, int32_t timestamp);
+  // Status HPExpireTime(const Slice& key, const Slice& field);
+
+  // Status HPersist(const Slice& key, const Slice& field);
+  // Status HTTL(const Slice& key, const Slice& field);
+  // Status HPTTL(const Slice& key, const Slice& field);
+
+
   // Returns the number of fields contained in the hash stored at key.
   // Return 0 when key does not exist.
   Status HLen(const Slice& key, int32_t* ret);

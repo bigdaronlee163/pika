@@ -418,6 +418,21 @@ Status Storage::HSetnx(const Slice& key, const Slice& field, const Slice& value,
   return inst->HSetnx(key, field, value, ret);
 }
 
+Status  Storage::HExpire(const Slice& key,int32_t sec, int32_t numfields, const std::vector<std::string>& fields, int32_t* ret){
+  auto& inst = GetDBInstance(key);
+return inst->HExpire(key,  sec, numfields, fields, ret);
+}
+// Status HExpireat(const Slice& key, const Slice& field, int32_t timestamp);
+// Status HExpireTime(const Slice& key, const Slice& field);
+
+// Status HPExpire(const Slice& key, const Slice& field, int32_t ttl);
+// Status HPExpireat(const Slice& key, const Slice& field, int32_t timestamp);
+// Status HPExpireTime(const Slice& key, const Slice& field);
+
+// Status HPersist(const Slice& key, const Slice& field);
+// Status HTTL(const Slice& key, const Slice& field);
+// Status HPTTL(const Slice& key, const Slice& field);
+
 Status Storage::HLen(const Slice& key, int32_t* ret) {
   auto& inst = GetDBInstance(key);
   return inst->HLen(key, ret);
