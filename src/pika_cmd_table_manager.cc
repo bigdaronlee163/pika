@@ -20,6 +20,8 @@ PikaCmdTableManager::PikaCmdTableManager() {
 }
 
 void PikaCmdTableManager::InitCmdTable(void) {
+  // InitCmdTable 是 PikaCmdTableManager 的方法。 
+  // 下面这个是在 pika_command.cc 中定义的初始化 cmd table 的方法，都没有命名空间。直接全局的空间。
   ::InitCmdTable(cmds_.get());
   for (const auto& cmd : *cmds_) {
     if (cmd.second->flag() & kCmdFlagsWrite) {

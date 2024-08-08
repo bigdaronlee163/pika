@@ -32,7 +32,7 @@ using pstd::Status;
 extern PikaServer* g_pika_server;
 extern std::unique_ptr<PikaReplicaManager> g_pika_rm;
 extern std::unique_ptr<PikaCmdTableManager> g_pika_cmd_table_manager;
-
+// 初始化cmd table，通过cmd的name找到cmd的具体实现。
 void InitCmdTable(CmdTable* cmd_table) {
   // Admin
   ////Slaveof
@@ -386,7 +386,7 @@ void InitCmdTable(CmdTable* cmd_table) {
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNameDump, std::move(dumpptr)));
 
   // Hash
-  ////HDelCmd
+  ////HDelCmd  HDEL key field [field ...]  -3 估计是支持多个参数  但是最少需要3个参数。
   std::unique_ptr<Cmd> hdelptr =
       std::make_unique<HDelCmd>(kCmdNameHDel, -3, kCmdFlagsWrite |  kCmdFlagsHash | kCmdFlagsUpdateCache | kCmdFlagsDoThroughDB | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNameHDel, std::move(hdelptr)));
@@ -394,7 +394,7 @@ void InitCmdTable(CmdTable* cmd_table) {
   std::unique_ptr<Cmd> hsetptr =
       std::make_unique<HSetCmd>(kCmdNameHSet, 4, kCmdFlagsWrite |  kCmdFlagsHash | kCmdFlagsUpdateCache | kCmdFlagsDoThroughDB | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNameHSet, std::move(hsetptr)));
-  ////HGetCmd
+  ////HGetCmd  需要三个参数。 HGET key field 
   std::unique_ptr<Cmd> hgetptr =
       std::make_unique<HGetCmd>(kCmdNameHGet, 3, kCmdFlagsRead |  kCmdFlagsHash | kCmdFlagsUpdateCache | kCmdFlagsDoThroughDB | kCmdFlagsReadCache |kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNameHGet, std::move(hgetptr)));
@@ -422,11 +422,11 @@ void InitCmdTable(CmdTable* cmd_table) {
   std::unique_ptr<Cmd> hlenptr =
       std::make_unique<HLenCmd>(kCmdNameHLen, 2, kCmdFlagsRead |  kCmdFlagsHash | kCmdFlagsUpdateCache | kCmdFlagsDoThroughDB | kCmdFlagsReadCache | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNameHLen, std::move(hlenptr)));
-  ////HMgetCmd
+  ////HMgetCmd   HMGET key field [field ...]   -3 估计是支持多个参数  但是最少需要3个参数。
   std::unique_ptr<Cmd> hmgetptr =
       std::make_unique<HMgetCmd>(kCmdNameHMget, -3, kCmdFlagsRead |  kCmdFlagsHash | kCmdFlagsUpdateCache | kCmdFlagsDoThroughDB | kCmdFlagsReadCache |kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNameHMget, std::move(hmgetptr)));
-  ////HMsetCmd
+  ////HMsetCmd  HMSET key field value [field value ...]  -4 表示最少需要四个参数。 
   std::unique_ptr<Cmd> hmsetptr =
       std::make_unique<HMsetCmd>(kCmdNameHMset, -4, kCmdFlagsWrite |  kCmdFlagsHash | kCmdFlagsUpdateCache | kCmdFlagsDoThroughDB | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNameHMset, std::move(hmsetptr)));
@@ -831,7 +831,17 @@ Cmd* GetCmdFromDB(const std::string& opt, const CmdTable& cmd_table) {
 
 bool Cmd::CheckArg(uint64_t num) const { return !((arity_ > 0 && num != arity_) || (arity_ < 0 && num < -arity_)); }
 
+// cmd 的构造函数。
+/*
+- 参数包括： 
+     -  name ：命令的名称，类型为  std::string 。 
+     -  arity ：命令的参数个数，类型为  int 。 
+     -  flag ：命令的标志，类型为  uint32_t 。 
+     -  aclCategory ：访问控制列表（ACL）分类，类型为  uint32_t 。 
+     -  cache_missed_in_rtc_  被初始化为  false ，表示在 RTC（实时计算）中没有缓存缺失的情况。 
+*/
 Cmd::Cmd(std::string name, int arity, uint32_t flag, uint32_t aclCategory)
+
     : name_(std::move(name)), arity_(arity), flag_(flag), aclCategory_(aclCategory), cache_missed_in_rtc_(false) {
 }
 

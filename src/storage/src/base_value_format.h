@@ -46,7 +46,9 @@ constexpr char DataTypeToTag(DataType type) {
 
 class InternalValue {
 public:
+  // 还是更新了一些东西的。 和xcache 还是存在区别的。 
  explicit InternalValue(DataType type, const rocksdb::Slice& user_value) : type_(type), user_value_(user_value) {
+   // 利用构造函数，设置创建的时间。
    ctime_ = pstd::NowMicros() / 1e6;
  }
 
@@ -94,6 +96,7 @@ protected:
   char reserve_[16] = {0};
 };
 // 解析出来的内部value.
+// 定义了很多虚函数，用于不同的数据结构。 比如hash，set，list，zset，stream等。
 class ParsedInternalValue {
 public:
   // Use this constructor after rocksdb::DB::Get(), since we use this in
