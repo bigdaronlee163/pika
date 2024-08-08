@@ -54,8 +54,10 @@ public:
   // Use this constructor after rocksdb::DB::Get(), since we use this in
   // the implement of user interfaces and may need to modify the
   // original value suffix, so the value_ must point to the string
+  // 通过这个构造函数，获取具体的内容。
   explicit ParsedBaseDataValue(std::string* value) : ParsedInternalValue(value) {
     if (value_->size() >= kBaseDataValueSuffixLength) {
+      // 解析具体的内容。
       user_value_ = rocksdb::Slice(value_->data(), value_->size() - kBaseDataValueSuffixLength);
       memcpy(reserve_, value_->data() + user_value_.size(), kSuffixReserveLength);
       ctime_ = DecodeFixed64(value_->data() + user_value_.size() + kSuffixReserveLength);
@@ -77,7 +79,7 @@ public:
   virtual ~ParsedBaseDataValue() = default;
 
   void SetEtimeToValue() override {}
-
+  // 通过rocksdb返回的内容，解析具体的内容。
   void SetCtimeToValue() override {
     if (value_) {
       char* dst = const_cast<char*>(value_->data()) + value_->size() - kTimestampLength;

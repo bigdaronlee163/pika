@@ -640,6 +640,7 @@ Status Redis::HMGet(const Slice& key, const std::vector<std::string>& fields, st
   const rocksdb::Snapshot* snapshot;
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
+  // 通过 metakey 和 cf 获取元信息。 
   BaseMetaKey base_meta_key(key);
   Status s = db_->Get(read_options, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
   if (s.ok() && !ExpectedMetaValue(DataType::kHashes, meta_value)) {
@@ -653,6 +654,7 @@ Status Redis::HMGet(const Slice& key, const std::vector<std::string>& fields, st
     }
   }
   if (s.ok()) {
+    // 解析上面获取到的。
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
     if ((is_stale = parsed_hashes_meta_value.IsStale()) || parsed_hashes_meta_value.Count() == 0) {
       for (size_t idx = 0; idx < fields.size(); ++idx) {
@@ -662,9 +664,11 @@ Status Redis::HMGet(const Slice& key, const std::vector<std::string>& fields, st
     } else {
       version = parsed_hashes_meta_value.Version();
       for (const auto& field : fields) {
+        // 构建hash的key。包含三个内容，key  version field 保证和别的key不重复。 
         HashesDataKey hashes_data_key(key, version, field);
         s = db_->Get(read_options, handles_[kHashesDataCF], hashes_data_key.Encode(), &value);
         if (s.ok()) {
+          // 这里是get，获取到了value之后，需要解析。 
           ParsedBaseDataValue parsed_internal_value(&value);
           parsed_internal_value.StripSuffix();
           vss->push_back({value, Status::OK()});
@@ -728,6 +732,7 @@ Status Redis::HMSet(const Slice& key, const std::vector<FieldValue>& fvs) {
       batch.Put(handles_[kMetaCF], base_meta_key.Encode(), meta_value);
       for (const auto& fv : filtered_fvs) {
         HashesDataKey hashes_data_key(key, version, fv.field);
+        // set的时候，需要往里面㝍。需要构建一个新的 baseData 
         BaseDataValue inter_value(fv.value);
         batch.Put(handles_[kHashesDataCF], hashes_data_key.Encode(), inter_value.Encode());
       }
@@ -812,6 +817,8 @@ Status Redis::HSet(const Slice& key, const Slice& field, const Slice& value, int
         if (data_value == value.ToString()) {
           return Status::OK();
         } else {
+          // 使用value，构建出 db 需要的 key  value 
+          // key 使用  hashes_data_key(key, version, field); 构成。 
           BaseDataValue internal_value(value);
           batch.Put(handles_[kHashesDataCF], hashes_data_key.Encode(), internal_value.Encode());
           statistic++;
