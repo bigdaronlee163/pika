@@ -33,6 +33,8 @@ class HDelCmd : public Cmd {
 
  private:
   std::string key_;
+  // 用于承接需要删除的字段。
+  // 
   std::vector<std::string> fields_;
   int32_t deleted_ = 0;
   void DoInitial() override;
@@ -102,6 +104,7 @@ class HSetCmd : public Cmd {
   Cmd* Clone() override { return new HSetCmd(*this); }
 
  private:
+ // 每个命令的参数组成不同。
   std::string key_, field_, value_;
   void DoInitial() override;
   rocksdb::Status s_;

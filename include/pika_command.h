@@ -316,6 +316,7 @@ const std::string kNewLine = "\r\n";
 
 class CmdRes {
  public:
+  // 记录redis协议常用的字段。
   enum CmdRet {
     kNone = 0,
     kOk,
@@ -347,9 +348,9 @@ class CmdRes {
     kTxnAbort,
     kMultiKey
   };
-
+  // 构造函数。
   CmdRes() = default;
-
+  // 判断是否为不同的情况。
   bool none() const { return ret_ == kNone && message_.empty(); }
   bool ok() const { return ret_ == kOk || ret_ == kNone; }
   CmdRet ret() const { return ret_; }
@@ -359,6 +360,7 @@ class CmdRes {
   }
   bool CacheMiss() const { return ret_ == kCacheMiss; }
   std::string raw_message() const { return message_; }
+  // 返回具体的消息内容。 格式： 类型+具体的信息。
   std::string message() const {
     std::string result;
     switch (ret_) {
@@ -451,6 +453,11 @@ class CmdRes {
   }
 
   // Inline functions for Create Redis protocol
+  // 头文件中的函数，自动inline吗？ 
+  // 总结来说，虽然你没有显式地使用  inline  关键字，
+  // 但在头文件中定义的这些小型函数通常会被编译器视为内联函数，
+  // 从而可能会被自动内联。为了确保这一点，
+  // 可以在函数定义前加上  inline  关键字，尽管这不是必需的。
   void AppendStringLen(int64_t ori) { RedisAppendLen(message_, ori, "$"); }
   void AppendStringLenUint64(uint64_t ori) { RedisAppendLenUint64(message_, ori, "$"); }
   void AppendArrayLen(int64_t ori) { RedisAppendLen(message_, ori, "*"); }
@@ -473,7 +480,7 @@ class CmdRes {
       AppendString(item);
     }
   }
-
+  // 设置响应结果。
   void SetRes(CmdRet _ret, const std::string& content = "") {
     ret_ = _ret;
     if (!content.empty()) {
@@ -482,7 +489,9 @@ class CmdRes {
   }
 
  private:
+  // 记录具体响应的内容。
   std::string message_;
+  // 记录响应的类型。
   CmdRet ret_ = kNone;
 };
 
@@ -642,6 +651,7 @@ class Cmd : public std::enable_shared_from_this<Cmd> {
   std::vector<std::string> subCmdName_;  // sub command name, may be empty
 
  protected:
+  // 承接cmd的result。
   CmdRes res_;
   PikaCmdArgsType argv_;
   std::string db_name_;

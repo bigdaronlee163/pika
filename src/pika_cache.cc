@@ -1624,7 +1624,9 @@ Status PikaCache::WriteZSetToCache(std::string& key, std::vector<storage::ScoreM
   }
   return Status::OK();
 }
-
+//  PushKeyToAsyncLoadQueue  
+// 函数的主要功能是将一个指定类型的键及其相关数据库对象推送到一个异步加载队列中。
+// 这个操作通常用于缓存机制中，以便在后台线程中异步处理数据加载，从而提高程序的性能和响应速度。
 void PikaCache::PushKeyToAsyncLoadQueue(const char key_type, std::string& key, const std::shared_ptr<DB>& db) {
   cache_load_thread_->Push(key_type, key, db);
 }

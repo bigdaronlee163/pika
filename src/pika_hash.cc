@@ -10,7 +10,8 @@
 #include "include/pika_conf.h"
 #include "include/pika_slot_command.h"
 #include "include/pika_cache.h"
-
+// 声明变量 
+//   extern  关键字表示这个变量是在其他地方定义的，当前文件只是在声明它。
 extern std::unique_ptr<PikaConf> g_pika_conf;
 
 void HDelCmd::DoInitial() {
@@ -22,12 +23,17 @@ void HDelCmd::DoInitial() {
   auto iter = argv_.begin();
   iter++;
   iter++;
+  //   -  fields_.assign(iter, argv_.end());  的意思是
+  // 将从  iter  到  argv_  容器末尾的所有元素复制到  fields_  容器中。
+  // 这会清空  fields_  中的现有元素，并用新的元素填充。 
   fields_.assign(iter, argv_.end());
 }
 
 void HDelCmd::Do() {
+  // 删除的具体实现。
   s_ = db_->storage()->HDel(key_, fields_, &deleted_);
-
+  // 根据db具体的响应来确定响应的内容。
+  // 和redis的响应不一样，需要兼容处理。
   if (s_.ok() || s_.IsNotFound()) {
     res_.AppendInteger(deleted_);
   } else if (s_.IsInvalidArgument()) {
@@ -36,11 +42,12 @@ void HDelCmd::Do() {
     res_.SetRes(CmdRes::kErrOther, s_.ToString());
   }
 }
-
+// db: 的执行操作。
+// cache 的执行操作。
 void HDelCmd::DoThroughDB() {
   Do();
 }
-
+// 需要删除cache中的数据。
 void HDelCmd::DoUpdateCache() {
   if (s_.ok() && deleted_ > 0) {
     db_->cache()->HDel(key_, fields_);
@@ -121,7 +128,7 @@ void HGetCmd::DoThroughDB() {
   res_.clear();
   Do();
 }
-
+// cache的兼容操作很多啊。
 void HGetCmd::DoUpdateCache() {
   if (s_.ok()) {
     db_->cache()->PushKeyToAsyncLoadQueue(PIKA_KEY_TYPE_HASH, key_, db_);
@@ -133,6 +140,7 @@ void HGetallCmd::DoInitial() {
     res_.SetRes(CmdRes::kWrongNum, kCmdNameHGetall);
     return;
   }
+  // getall 只需要一个参数。
   key_ = argv_[1];
 }
 
@@ -140,6 +148,7 @@ void HGetallCmd::Do() {
   int64_t total_fv = 0;
   int64_t cursor = 0;
   int64_t next_cursor = 0;
+  // 避免响应过大，
   size_t raw_limit = g_pika_conf->max_client_response_size();
   std::string raw;
   std::vector<storage::FieldValue> fvs;
@@ -158,6 +167,7 @@ void HGetallCmd::Do() {
         RedisAppendLenUint64(raw, fv.value.size(), "$");
         RedisAppendContent(raw, fv.value);
       }
+      // 表示数据量过多，停止返回。
       if (raw.size() >= raw_limit) {
         res_.SetRes(CmdRes::kErrOther, "Response exceeds the max-client-response-size limit");
         return;
