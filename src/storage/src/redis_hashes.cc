@@ -11,11 +11,11 @@
 #include <glog/logging.h>
 
 #include "pstd/include/pika_codis_slot.h"
+#include "src/base_data_key_format.h"
+#include "src/base_data_value_format.h"
 #include "src/base_filter.h"
 #include "src/scope_record_lock.h"
 #include "src/scope_snapshot.h"
-#include "src/base_data_key_format.h"
-#include "src/base_data_value_format.h"
 #include "storage/util.h"
 
 namespace storage {
@@ -59,34 +59,34 @@ Status Redis::ScanHashesKeyNum(KeyInfo* key_info) {
   return Status::OK();
 }
 /*
--  key ：要操作的哈希键。 
--  fields ：要删除的字段列表。 
--  ret ：指向一个整数的指针，用于返回实际删除的字段数量。 
+-  key ：要操作的哈希键。
+-  fields ：要删除的字段列表。
+-  ret ：指向一个整数的指针，用于返回实际删除的字段数量。
 */
 Status Redis::HDel(const Slice& key, const std::vector<std::string>& fields, int32_t* ret) {
   /*
-  -  statistic ：用于统计删除操作的数量。 
-  -  filtered_fields ：存储去重后的字段列表。 
+  -  statistic ：用于统计删除操作的数量。
+  -  filtered_fields ：存储去重后的字段列表。
   -  field_set ：用于快速查找和去重字段。
   */
   uint32_t statistic = 0;
   std::vector<std::string> filtered_fields;
   std::unordered_set<std::string> field_set;
-  for (const auto & iter : fields) {
+  for (const auto& iter : fields) {
     const std::string& field = iter;
     if (field_set.find(field) == field_set.end()) {
-      field_set.insert(field); // set去除重复的字段。
+      field_set.insert(field);  // set去除重复的字段。
       filtered_fields.push_back(iter);
     }
   }
   /*
   初始化 RocksDB 批处理
-  -  batch ：用于批量写入操作。 
-  -  read_options ：设置读取选项。 
-  -  snapshot ：用于快照读取。 
-  -  meta_value ：存储元数据的值。 
-  -  del_cnt ：计数器，用于统计删除的字段数量。 
-  -  version ：哈希的版本号。 
+  -  batch ：用于批量写入操作。
+  -  read_options ：设置读取选项。
+  -  snapshot ：用于快照读取。
+  -  meta_value ：存储元数据的值。
+  -  del_cnt ：计数器，用于统计删除的字段数量。
+  -  version ：哈希的版本号。
   */
   rocksdb::WriteBatch batch;
   // 把go-redis过了一遍之后，发生代码看着更加亲切了。
@@ -96,7 +96,7 @@ Status Redis::HDel(const Slice& key, const std::vector<std::string>& fields, int
   std::string meta_value;
   int32_t del_cnt = 0;
   uint64_t version = 0;
-  // - 使用作用域锁定和快照，以确保在操作期间数据的一致性。 
+  // - 使用作用域锁定和快照，以确保在操作期间数据的一致性。
   // 删除需要加锁操作。
   ScopeRecordLock l(lock_mgr_, key);
   ScopeSnapshot ss(db_, &snapshot);
@@ -104,29 +104,28 @@ Status Redis::HDel(const Slice& key, const std::vector<std::string>& fields, int
 
   BaseMetaKey base_meta_key(key);
   // 没有额外的配置，都是使用的默认参数。
-  // hash使用自己单独的列簇：kMetaCF 
+  // hash使用自己单独的列簇：kMetaCF
   Status s = db_->Get(read_options, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
   // 如果可以获取到，但是key的类型不是hash。
   if (s.ok() && !ExpectedMetaValue(DataType::kHashes, meta_value)) {
-    // 如果过期了，就证明这个key是不存在的。 
+    // 如果过期了，就证明这个key是不存在的。
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
-    } else { // 如果没有过期，就返回类型不对的错误。
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+    } else {  // 如果没有过期，就返回类型不对的错误。
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
-  // 
+  //
   if (s.ok()) {
-    // - 解析元数据，如果数据过期或计数为零，则直接返回。 
+    // - 解析元数据，如果数据过期或计数为零，则直接返回。
     // meta_value 里面包含了 key 的版本信息。
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
     // count代表了key关联的元素的个数。
     if (parsed_hashes_meta_value.IsStale() || parsed_hashes_meta_value.Count() == 0) {
-      *ret = 0; // 
-      // 
+      *ret = 0;  //
+      //
       return Status::OK();
     } else {
       // 如果没有过期，则进行进一步处理：删除key对应的中的字段。
@@ -148,8 +147,8 @@ Status Redis::HDel(const Slice& key, const std::vector<std::string>& fields, int
       }
       *ret = del_cnt;
       // key中的field删除。
-      if (!parsed_hashes_meta_value.CheckModifyCount(-del_cnt)){
-        // 这是为什么呢？ 
+      if (!parsed_hashes_meta_value.CheckModifyCount(-del_cnt)) {
+        // 这是为什么呢？
         return Status::InvalidArgument("hash size overflow");
       }
       parsed_hashes_meta_value.ModifyCount(-del_cnt);
@@ -180,7 +179,8 @@ Status Redis::HGet(const Slice& key, const Slice& field, std::string* value) {
   std::string meta_value;
   uint64_t version = 0;
   rocksdb::ReadOptions read_options;
-  // 在 RocksDB 中，快照（ Snapshot ）是一种用于读取数据的一致性视图。使用快照可以确保在读取数据时，数据的一致性和完整性。
+  // 在 RocksDB 中，快照（ Snapshot
+  // ）是一种用于读取数据的一致性视图。使用快照可以确保在读取数据时，数据的一致性和完整性。
   // 快照和事务相关，可以实现具体的事务。
   const rocksdb::Snapshot* snapshot;
   ScopeSnapshot ss(db_, &snapshot);
@@ -193,10 +193,9 @@ Status Redis::HGet(const Slice& key, const Slice& field, std::string* value) {
       s = Status::NotFound();
     } else {
       // 预期的类型和实际的类型。
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -208,7 +207,8 @@ Status Redis::HGet(const Slice& key, const Slice& field, std::string* value) {
     } else {
       version = parsed_hashes_meta_value.Version();
       /*
-      1. HashesDataKey  是一个封装类，它将  key 、 version  和  field  组合在一起，形成一个唯一的标识符。这样做可以使代码更加清晰，避免在多个地方直接操作原始数据。 
+      1. HashesDataKey  是一个封装类，它将  key 、 version  和  field
+      组合在一起，形成一个唯一的标识符。这样做可以使代码更加清晰，避免在多个地方直接操作原始数据。
       */
       HashesDataKey data_key(key, version, field);
       s = db_->Get(read_options, handles_[kHashesDataCF], data_key.Encode(), value);
@@ -237,10 +237,9 @@ Status Redis::HGetall(const Slice& key, std::vector<FieldValue>* fvs) {
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -293,10 +292,9 @@ Status Redis::HGetallWithTTL(const Slice& key, std::vector<FieldValue>* fvs, int
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -310,9 +308,9 @@ Status Redis::HGetallWithTTL(const Slice& key, std::vector<FieldValue>* fvs, int
       // 获取具体的时间。【比redis中实现应该会简单一些。】
       /*
 
-      - 解析元数据，检查是否有字段和是否过期。 
-      - 获取过期时间（ Etime ）并计算剩余的 TTL： 
-      - 如果 TTL 为 0，设置为 -1，表示没有设置过期时间。 
+      - 解析元数据，检查是否有字段和是否过期。
+      - 获取过期时间（ Etime ）并计算剩余的 TTL：
+      - 如果 TTL 为 0，设置为 -1，表示没有设置过期时间。
       - 否则，计算当前时间与过期时间的差值。如果差值为负，设置为 -2，表示已过期。
 
       */
@@ -325,7 +323,7 @@ Status Redis::HGetallWithTTL(const Slice& key, std::vector<FieldValue>* fvs, int
         *ttl = *ttl - curtime >= 0 ? *ttl - curtime : -2;
       }
       /*
-        - 创建一个  HashesDataKey  对象，用于生成前缀键。 
+        - 创建一个  HashesDataKey  对象，用于生成前缀键。
         - 使用前缀键生成一个切片（ prefix ），并创建一个新的迭代器以遍历哈希表中的字段
       */
       version = parsed_hashes_meta_value.Version();
@@ -335,8 +333,8 @@ Status Redis::HGetallWithTTL(const Slice& key, std::vector<FieldValue>* fvs, int
       // 5. **准备迭代器以获取字段值**
       auto iter = db_->NewIterator(read_options, handles_[kHashesDataCF]);
       /*
-      - 使用迭代器从前缀开始查找，并遍历所有以该前缀开头的键。 
-      - 对每个有效的键，解析哈希字段和对应的值，并将它们存储到  fvs  中。 
+      - 使用迭代器从前缀开始查找，并遍历所有以该前缀开头的键。
+      - 对每个有效的键，解析哈希字段和对应的值，并将它们存储到  fvs  中。
       */
       for (iter->Seek(prefix); iter->Valid() && iter->key().starts_with(prefix); iter->Next()) {
         ParsedHashesDataKey parsed_hashes_data_key(iter->key());
@@ -350,10 +348,10 @@ Status Redis::HGetallWithTTL(const Slice& key, std::vector<FieldValue>* fvs, int
 }
 
 /*
-- **key**: 要操作的哈希键。 
-- **field**: 要增加值的字段。 
-- **value**: 增加的整数值。 
-- **ret**: 指向  int64_t  的指针，用于返回增加后的新值。 
+- **key**: 要操作的哈希键。
+- **field**: 要增加值的字段。
+- **value**: 增加的整数值。
+- **ret**: 指向  int64_t  的指针，用于返回增加后的新值。
 */
 Status Redis::HIncrby(const Slice& key, const Slice& field, int64_t value, int64_t* ret) {
   *ret = 0;
@@ -365,7 +363,6 @@ Status Redis::HIncrby(const Slice& key, const Slice& field, int64_t value, int64
   std::string old_value;
   std::string meta_value;
 
-
   BaseMetaKey base_meta_key(key);
   Status s = db_->Get(default_read_options_, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
   char value_buf[32] = {0};
@@ -374,10 +371,9 @@ Status Redis::HIncrby(const Slice& key, const Slice& field, int64_t value, int64
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -394,7 +390,7 @@ Status Redis::HIncrby(const Slice& key, const Slice& field, int64_t value, int64
       batch.Put(handles_[kHashesDataCF], hashes_data_key.Encode(), internal_value.Encode());
       *ret = value;
     } else {
-      //  - 如果字段存在，获取旧值并进行增量操作： 
+      //  - 如果字段存在，获取旧值并进行增量操作：
       version = parsed_hashes_meta_value.Version();
       HashesDataKey hashes_data_key(key, version, field);
       s = db_->Get(default_read_options_, handles_[kHashesDataCF], hashes_data_key.Encode(), &old_value);
@@ -403,8 +399,8 @@ Status Redis::HIncrby(const Slice& key, const Slice& field, int64_t value, int64
         parsed_internal_value.StripSuffix();
         int64_t ival = 0;
         /*
-          - 检查旧值是否为整数，如果不是，返回错误。 
-          - 检查增量操作是否会导致溢出。 
+          - 检查旧值是否为整数，如果不是，返回错误。
+          - 检查增量操作是否会导致溢出。
           - 更新字段的值并写入数据库。
         */
         if (StrToInt64(old_value.data(), old_value.size(), &ival) == 0) {
@@ -419,9 +415,9 @@ Status Redis::HIncrby(const Slice& key, const Slice& field, int64_t value, int64
         batch.Put(handles_[kHashesDataCF], hashes_data_key.Encode(), internal_value.Encode());
         statistic++;
       } else if (s.IsNotFound()) {
-        // - 如果元数据不存在，创建新的哈希元数据并初始化字段的值。  
+        // - 如果元数据不存在，创建新的哈希元数据并初始化字段的值。
         Int64ToStr(value_buf, 32, value);
-        if (!parsed_hashes_meta_value.CheckModifyCount(1)){
+        if (!parsed_hashes_meta_value.CheckModifyCount(1)) {
           return Status::InvalidArgument("hash size overflow");
         }
         BaseDataValue internal_value(value_buf);
@@ -434,7 +430,7 @@ Status Redis::HIncrby(const Slice& key, const Slice& field, int64_t value, int64
       }
     }
   } else if (s.IsNotFound()) {
-    // - 如果元数据不存在，创建新的哈希元数据并初始化字段的值。  
+    // - 如果元数据不存在，创建新的哈希元数据并初始化字段的值。
     EncodeFixed32(meta_value_buf, 1);
     HashesMetaValue hashes_meta_value(DataType::kHashes, Slice(meta_value_buf, 4));
     version = hashes_meta_value.UpdateVersion();
@@ -468,7 +464,6 @@ Status Redis::HIncrbyfloat(const Slice& key, const Slice& field, const Slice& by
     return Status::Corruption("value is not a vaild float");
   }
 
-
   BaseMetaKey base_meta_key(key);
   Status s = db_->Get(default_read_options_, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
   char meta_value_buf[4] = {0};
@@ -476,10 +471,9 @@ Status Redis::HIncrbyfloat(const Slice& key, const Slice& field, const Slice& by
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -516,7 +510,7 @@ Status Redis::HIncrbyfloat(const Slice& key, const Slice& field, const Slice& by
         statistic++;
       } else if (s.IsNotFound()) {
         LongDoubleToStr(long_double_by, new_value);
-        if (!parsed_hashes_meta_value.CheckModifyCount(1)){
+        if (!parsed_hashes_meta_value.CheckModifyCount(1)) {
           return Status::InvalidArgument("hash size overflow");
         }
         parsed_hashes_meta_value.ModifyCount(1);
@@ -560,10 +554,9 @@ Status Redis::HKeys(const Slice& key, std::vector<std::string>* fields) {
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -577,7 +570,8 @@ Status Redis::HKeys(const Slice& key, std::vector<std::string>* fields) {
       HashesDataKey hashes_data_key(key, version, "");
       Slice prefix = hashes_data_key.EncodeSeekKey();
       /*
-      KeyStatisticsDurationGuard  是一个用于统计特定操作持续时间的 RAII（资源获取即初始化）类。它的主要作用是帮助开发者在执行某个操作（如对特定键的读取或写入操作）时，自动跟踪和记录该操作的持续时间。
+      KeyStatisticsDurationGuard  是一个用于统计特定操作持续时间的
+      RAII（资源获取即初始化）类。它的主要作用是帮助开发者在执行某个操作（如对特定键的读取或写入操作）时，自动跟踪和记录该操作的持续时间。
       */
       KeyStatisticsDurationGuard guard(this, DataType::kHashes, key.ToString());
       // 迭代器。
@@ -606,10 +600,9 @@ Status Redis::HLen(const Slice& key, int32_t* ret, std::string&& prefetch_meta) 
       if (ExpectedStale(meta_value)) {
         s = Status::NotFound();
       } else {
-        return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+        return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() + ", expect type: " +
+                                       DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
+                                       DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
       }
     }
   }
@@ -640,17 +633,16 @@ Status Redis::HMGet(const Slice& key, const std::vector<std::string>& fields, st
   const rocksdb::Snapshot* snapshot;
   ScopeSnapshot ss(db_, &snapshot);
   read_options.snapshot = snapshot;
-  // 通过 metakey 和 cf 获取元信息。 
+  // 通过 metakey 和 cf 获取元信息。
   BaseMetaKey base_meta_key(key);
   Status s = db_->Get(read_options, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
   if (s.ok() && !ExpectedMetaValue(DataType::kHashes, meta_value)) {
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -664,11 +656,11 @@ Status Redis::HMGet(const Slice& key, const std::vector<std::string>& fields, st
     } else {
       version = parsed_hashes_meta_value.Version();
       for (const auto& field : fields) {
-        // 构建hash的key。包含三个内容，key  version field 保证和别的key不重复。 
+        // 构建hash的key。包含三个内容，key  version field 保证和别的key不重复。
         HashesDataKey hashes_data_key(key, version, field);
         s = db_->Get(read_options, handles_[kHashesDataCF], hashes_data_key.Encode(), &value);
         if (s.ok()) {
-          // 这里是get，获取到了value之后，需要解析。 
+          // 这里是get，获取到了value之后，需要解析。
           ParsedBaseDataValue parsed_internal_value(&value);
           parsed_internal_value.StripSuffix();
           vss->push_back({value, Status::OK()});
@@ -715,10 +707,9 @@ Status Redis::HMSet(const Slice& key, const std::vector<FieldValue>& fvs) {
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -732,7 +723,7 @@ Status Redis::HMSet(const Slice& key, const std::vector<FieldValue>& fvs) {
       batch.Put(handles_[kMetaCF], base_meta_key.Encode(), meta_value);
       for (const auto& fv : filtered_fvs) {
         HashesDataKey hashes_data_key(key, version, fv.field);
-        // set的时候，需要往里面㝍。需要构建一个新的 baseData 
+        // set的时候，需要往里面㝍。需要构建一个新的 baseData
         BaseDataValue inter_value(fv.value);
         batch.Put(handles_[kHashesDataCF], hashes_data_key.Encode(), inter_value.Encode());
       }
@@ -754,7 +745,7 @@ Status Redis::HMSet(const Slice& key, const std::vector<FieldValue>& fvs) {
           return s;
         }
       }
-      if (!parsed_hashes_meta_value.CheckModifyCount(count)){
+      if (!parsed_hashes_meta_value.CheckModifyCount(count)) {
         return Status::InvalidArgument("hash size overflow");
       }
       parsed_hashes_meta_value.ModifyCount(count);
@@ -791,10 +782,9 @@ Status Redis::HSet(const Slice& key, const Slice& field, const Slice& value, int
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -817,14 +807,14 @@ Status Redis::HSet(const Slice& key, const Slice& field, const Slice& value, int
         if (data_value == value.ToString()) {
           return Status::OK();
         } else {
-          // 使用value，构建出 db 需要的 key  value 
-          // key 使用  hashes_data_key(key, version, field); 构成。 
+          // 使用value，构建出 db 需要的 key  value
+          // key 使用  hashes_data_key(key, version, field); 构成。
           BaseDataValue internal_value(value);
           batch.Put(handles_[kHashesDataCF], hashes_data_key.Encode(), internal_value.Encode());
           statistic++;
         }
       } else if (s.IsNotFound()) {
-        if (!parsed_hashes_meta_value.CheckModifyCount(1)){
+        if (!parsed_hashes_meta_value.CheckModifyCount(1)) {
           return Status::InvalidArgument("hash size overflow");
         }
         parsed_hashes_meta_value.ModifyCount(1);
@@ -868,10 +858,9 @@ Status Redis::HSetnx(const Slice& key, const Slice& field, const Slice& value, i
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -891,7 +880,7 @@ Status Redis::HSetnx(const Slice& key, const Slice& field, const Slice& value, i
       if (s.ok()) {
         *ret = 0;
       } else if (s.IsNotFound()) {
-        if (!parsed_hashes_meta_value.CheckModifyCount(1)){
+        if (!parsed_hashes_meta_value.CheckModifyCount(1)) {
           return Status::InvalidArgument("hash size overflow");
         }
         parsed_hashes_meta_value.ModifyCount(1);
@@ -931,10 +920,9 @@ Status Redis::HVals(const Slice& key, std::vector<std::string>* values) {
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -975,7 +963,7 @@ Status Redis::HStrlen(const Slice& key, const Slice& field, int32_t* len) {
 }
 
 Status Redis::HScan(const Slice& key, int64_t cursor, const std::string& pattern, int64_t count,
-                       std::vector<FieldValue>* field_values, int64_t* next_cursor) {
+                    std::vector<FieldValue>* field_values, int64_t* next_cursor) {
   *next_cursor = 0;
   field_values->clear();
   if (cursor < 0) {
@@ -998,10 +986,9 @@ Status Redis::HScan(const Slice& key, int64_t cursor, const std::string& pattern
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -1058,7 +1045,7 @@ Status Redis::HScan(const Slice& key, int64_t cursor, const std::string& pattern
 }
 
 Status Redis::HScanx(const Slice& key, const std::string& start_field, const std::string& pattern, int64_t count,
-                           std::vector<FieldValue>* field_values, std::string* next_field) {
+                     std::vector<FieldValue>* field_values, std::string* next_field) {
   next_field->clear();
   field_values->clear();
 
@@ -1075,10 +1062,9 @@ Status Redis::HScanx(const Slice& key, const std::string& start_field, const std
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -1123,17 +1109,17 @@ PKHScanRange  函数是一个用于在 Redis 哈希数据结构中扫描特定�
 它允许用户根据提供的起始字段、结束字段和匹配模式来获取字段及其对应的值。
 PKHScanRange  函数是一个用于在 Redis 哈希数据结构中扫描特定字段范围的函数。
 它允许用户根据提供的起始字段、结束字段和匹配模式来获取字段及其对应的值。
-- **key**: 要操作的哈希键。 
-- **field_start**: 开始扫描的字段（可以为空）。 
-- **field_end**: 结束扫描的字段（可以为空）。 
-- **pattern**: 匹配模式，用于过滤字段。 
-- **limit**: 返回的字段数量限制。 
-- **field_values**: 用于存储匹配的字段及其值的向量。 
-- **next_field**: 用于返回下一个字段的指针。 
+- **key**: 要操作的哈希键。
+- **field_start**: 开始扫描的字段（可以为空）。
+- **field_end**: 结束扫描的字段（可以为空）。
+- **pattern**: 匹配模式，用于过滤字段。
+- **limit**: 返回的字段数量限制。
+- **field_values**: 用于存储匹配的字段及其值的向量。
+- **next_field**: 用于返回下一个字段的指针。
 */
 Status Redis::PKHScanRange(const Slice& key, const Slice& field_start, const std::string& field_end,
-                                 const Slice& pattern, int32_t limit, std::vector<FieldValue>* field_values,
-                                 std::string* next_field) {
+                           const Slice& pattern, int32_t limit, std::vector<FieldValue>* field_values,
+                           std::string* next_field) {
   next_field->clear();
   field_values->clear();
 
@@ -1147,8 +1133,8 @@ Status Redis::PKHScanRange(const Slice& key, const Slice& field_start, const std
   bool start_no_limit = field_start.compare("") == 0;
   bool end_no_limit = field_end.empty();
   /*
-  2. **检查范围有效性**： 
-   - 检查  field_start  和  field_end  的有效性。如果  field_start  大于  field_end ，则返回无效参数的状态。 
+  2. **检查范围有效性**：
+   - 检查  field_start  和  field_end  的有效性。如果  field_start  大于  field_end ，则返回无效参数的状态。
   */
   if (!start_no_limit && !end_no_limit && (field_start.compare(field_end) > 0)) {
     return Status::InvalidArgument("error in given range");
@@ -1160,10 +1146,9 @@ Status Redis::PKHScanRange(const Slice& key, const Slice& field_start, const std
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -1175,24 +1160,24 @@ Status Redis::PKHScanRange(const Slice& key, const Slice& field_start, const std
       HashesDataKey hashes_data_prefix(key, version, Slice());
       HashesDataKey hashes_start_data_key(key, version, field_start);
       /*
-      5. **准备扫描**： 
-      - 获取哈希表的版本号。 
-      - 创建用于扫描的前缀键和起始数据键。 
-      - 使用  KeyStatisticsDurationGuard  监控操作的持续时间。 
+      5. **准备扫描**：
+      - 获取哈希表的版本号。
+      - 创建用于扫描的前缀键和起始数据键。
+      - 使用  KeyStatisticsDurationGuard  监控操作的持续时间。
       */
       std::string prefix = hashes_data_prefix.EncodeSeekKey().ToString();
       KeyStatisticsDurationGuard guard(this, DataType::kHashes, key.ToString());
       rocksdb::Iterator* iter = db_->NewIterator(read_options, handles_[kHashesDataCF]);
       /*
-      6. **创建迭代器并扫描字段**： 
-        - 创建一个新的迭代器以遍历哈希表中的字段。 
-        - 使用  Seek  方法开始扫描： 
-          - 如果  field_start  为空，则从哈希表的前缀开始。 
-          - 否则，从指定的  field_start  开始。 
-        - 在扫描过程中，检查每个字段是否满足以下条件： 
-          - 字段是否在  field_end  之前。 
-          - 字段是否匹配提供的模式。 
-          - 如果匹配，存储字段及其对应的值到  field_values  向量中。 
+      6. **创建迭代器并扫描字段**：
+        - 创建一个新的迭代器以遍历哈希表中的字段。
+        - 使用  Seek  方法开始扫描：
+          - 如果  field_start  为空，则从哈希表的前缀开始。
+          - 否则，从指定的  field_start  开始。
+        - 在扫描过程中，检查每个字段是否满足以下条件：
+          - 字段是否在  field_end  之前。
+          - 字段是否匹配提供的模式。
+          - 如果匹配，存储字段及其对应的值到  field_values  向量中。
           - 减少  remain  计数，直到达到限制
       */
       for (iter->Seek(start_no_limit ? prefix : hashes_start_data_key.Encode());
@@ -1224,18 +1209,19 @@ Status Redis::PKHScanRange(const Slice& key, const Slice& field_start, const std
 }
 
 /*
- PKHRScanRange  函数的主要作用是在 Redis 哈希中逆向扫描特定字段范围，返回匹配的字段及其值。它通过使用 RocksDB 的迭代器来实现高效的字段遍历，同时支持起始和结束字段的限制以及模式匹配。
-- **key**: 要操作的哈希键。 
-- **field_start**: 开始扫描的字段（可以为空）。 
-- **field_end**: 结束扫描的字段（可以为空）。 
-- **pattern**: 匹配模式，用于过滤字段。 
-- **limit**: 返回的字段数量限制。 
-- **field_values**: 用于存储匹配的字段及其值的向量。 
-- **next_field**: 用于返回下一个字段的指针。 
+ PKHRScanRange  函数的主要作用是在 Redis 哈希中逆向扫描特定字段范围，返回匹配的字段及其值。它通过使用 RocksDB
+的迭代器来实现高效的字段遍历，同时支持起始和结束字段的限制以及模式匹配。
+- **key**: 要操作的哈希键。
+- **field_start**: 开始扫描的字段（可以为空）。
+- **field_end**: 结束扫描的字段（可以为空）。
+- **pattern**: 匹配模式，用于过滤字段。
+- **limit**: 返回的字段数量限制。
+- **field_values**: 用于存储匹配的字段及其值的向量。
+- **next_field**: 用于返回下一个字段的指针。
 */
 Status Redis::PKHRScanRange(const Slice& key, const Slice& field_start, const std::string& field_end,
-                                  const Slice& pattern, int32_t limit, std::vector<FieldValue>* field_values,
-                                  std::string* next_field) {
+                            const Slice& pattern, int32_t limit, std::vector<FieldValue>* field_values,
+                            std::string* next_field) {
   next_field->clear();
   field_values->clear();
 
@@ -1259,10 +1245,9 @@ Status Redis::PKHRScanRange(const Slice& key, const Slice& field_start, const st
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
   if (s.ok()) {
@@ -1306,12 +1291,13 @@ Status Redis::PKHRScanRange(const Slice& key, const Slice& field_start, const st
   return Status::OK();
 }
 /*
-这个函数 Status Redis::HashesExpire(const Slice& key, int64_t ttl, std::string&& prefetch_meta) 是一个用于设置 Redis 哈希键过期时间的函数。以下是对该函数的详细解释：
+这个函数 Status Redis::HashesExpire(const Slice& key, int64_t ttl, std::string&& prefetch_meta) 是一个用于设置 Redis
+哈希键过期时间的函数。以下是对该函数的详细解释：
 
 函数参数
 const Slice& key: 这是要设置过期时间的哈希键。
-int64_t ttl: 这是要设置的过期时间（以秒为单位）。如果 ttl 为正数，则表示设置一个相对的过期时间；如果 ttl 为零或负数，则表示删除过期时间。
-std::string&& prefetch_meta: 这是一个预取的元数据字符串，用于减少数据库查询次数。
+int64_t ttl: 这是要设置的过期时间（以秒为单位）。如果 ttl 为正数，则表示设置一个相对的过期时间；如果 ttl
+为零或负数，则表示删除过期时间。 std::string&& prefetch_meta: 这是一个预取的元数据字符串，用于减少数据库查询次数。
 
 */
 Status Redis::HashesExpire(const Slice& key, int64_t ttl, std::string&& prefetch_meta) {
@@ -1328,10 +1314,9 @@ Status Redis::HashesExpire(const Slice& key, int64_t ttl, std::string&& prefetch
       if (ExpectedStale(meta_value)) {
         s = Status::NotFound();
       } else {
-        return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+        return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() + ", expect type: " +
+                                       DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
+                                       DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
       }
     }
   }
@@ -1371,10 +1356,9 @@ Status Redis::HashesDel(const Slice& key, std::string&& prefetch_meta) {
       if (ExpectedStale(meta_value)) {
         s = Status::NotFound();
       } else {
-        return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+        return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() + ", expect type: " +
+                                       DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
+                                       DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
       }
     }
   }
@@ -1395,7 +1379,8 @@ Status Redis::HashesDel(const Slice& key, std::string&& prefetch_meta) {
 }
 /*
 
-这个函数 Status Redis::HashesPersist(const Slice& key, std::string&& prefetch_meta) 的目的是移除 Redis 哈希键的过期时间，使其变为永久存在。以下是对该函数的详细解释：
+这个函数 Status Redis::HashesPersist(const Slice& key, std::string&& prefetch_meta) 的目的是移除 Redis
+哈希键的过期时间，使其变为永久存在。以下是对该函数的详细解释：
 
 函数参数
 const Slice& key: 这是要移除过期时间的哈希键。
@@ -1417,10 +1402,9 @@ Status Redis::HashesExpireat(const Slice& key, int64_t timestamp, std::string&& 
       if (ExpectedStale(meta_value)) {
         s = Status::NotFound();
       } else {
-        return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+        return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() + ", expect type: " +
+                                       DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
+                                       DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
       }
     }
   }
@@ -1459,10 +1443,9 @@ Status Redis::HashesPersist(const Slice& key, std::string&& prefetch_meta) {
       if (ExpectedStale(meta_value)) {
         s = Status::NotFound();
       } else {
-        return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+        return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() + ", expect type: " +
+                                       DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
+                                       DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
       }
     }
   }
@@ -1487,7 +1470,8 @@ Status Redis::HashesPersist(const Slice& key, std::string&& prefetch_meta) {
 }
 /*
 
-这个函数 Status Redis::HashesTTL(const Slice& key, int64_t* timestamp, std::string&& prefetch_meta) 的目的是获取 Redis 哈希键的剩余生存时间（TTL）。以下是对该函数的详细解释：
+这个函数 Status Redis::HashesTTL(const Slice& key, int64_t* timestamp, std::string&& prefetch_meta) 的目的是获取 Redis
+哈希键的剩余生存时间（TTL）。以下是对该函数的详细解释：
 
 函数参数
 const Slice& key: 这是要查询过期时间的哈希键。
@@ -1508,10 +1492,9 @@ Status Redis::HashesTTL(const Slice& key, int64_t* timestamp, std::string&& pref
       if (ExpectedStale(meta_value)) {
         s = Status::NotFound();
       } else {
-        return Status::InvalidArgument(
-        "WRONGTYPE, key: " + key.ToString() + ", expect type: " +
-        DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
-        DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+        return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() + ", expect type: " +
+                                       DataTypeStrings[static_cast<int>(DataType::kHashes)] + ", get type: " +
+                                       DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
       }
     }
   }
@@ -1569,7 +1552,8 @@ void Redis::ScanHashes() {
     ParsedHashesMetaValue parsed_hashes_meta_value(meta_iter->value());
     int32_t survival_time = 0;
     if (parsed_hashes_meta_value.Etime() != 0) {
-      survival_time = parsed_hashes_meta_value.Etime() > current_time ? parsed_hashes_meta_value.Etime() - current_time : -1;
+      survival_time =
+          parsed_hashes_meta_value.Etime() > current_time ? parsed_hashes_meta_value.Etime() - current_time : -1;
     }
     ParsedBaseMetaKey parsed_meta_key(meta_iter->key());
 
@@ -1582,7 +1566,6 @@ void Redis::ScanHashes() {
   LOG(INFO) << "***************Hashes Field Data***************";
   auto field_iter = db_->NewIterator(iterator_options, handles_[kHashesDataCF]);
   for (field_iter->SeekToFirst(); field_iter->Valid(); field_iter->Next()) {
-
     ParsedHashesDataKey parsed_hashes_data_key(field_iter->key());
     ParsedBaseDataValue parsed_internal_value(field_iter->value());
 
