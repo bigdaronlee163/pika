@@ -7,10 +7,10 @@
 
 #include "pstd/include/pstd_string.h"
 
+#include "include/pika_cache.h"
 #include "include/pika_conf.h"
 #include "include/pika_slot_command.h"
-#include "include/pika_cache.h"
-// 声明变量 
+// 声明变量
 //   extern  关键字表示这个变量是在其他地方定义的，当前文件只是在声明它。
 extern std::unique_ptr<PikaConf> g_pika_conf;
 
@@ -25,7 +25,7 @@ void HDelCmd::DoInitial() {
   iter++;
   //   -  fields_.assign(iter, argv_.end());  的意思是
   // 将从  iter  到  argv_  容器末尾的所有元素复制到  fields_  容器中。
-  // 这会清空  fields_  中的现有元素，并用新的元素填充。 
+  // 这会清空  fields_  中的现有元素，并用新的元素填充。
   fields_.assign(iter, argv_.end());
 }
 
@@ -44,9 +44,7 @@ void HDelCmd::Do() {
 }
 // db: 的执行操作。
 // cache 的执行操作。
-void HDelCmd::DoThroughDB() {
-  Do();
-}
+void HDelCmd::DoThroughDB() { Do(); }
 // 需要删除cache中的数据。
 void HDelCmd::DoUpdateCache() {
   if (s_.ok() && deleted_ > 0) {
@@ -77,9 +75,7 @@ void HSetCmd::Do() {
   }
 }
 
-void HSetCmd::DoThroughDB() {
-  Do();
-}
+void HSetCmd::DoThroughDB() { Do(); }
 
 void HSetCmd::DoUpdateCache() {
   if (s_.ok()) {
@@ -279,7 +275,8 @@ void HIncrbyCmd::Do() {
   if (s_.ok() || s_.IsNotFound()) {
     res_.AppendContent(":" + std::to_string(new_value));
     AddSlotKey("h", key_, db_);
-  } else if (s_.IsInvalidArgument() && s_.ToString().substr(0, std::char_traits<char>::length(ErrTypeMessage)) == ErrTypeMessage) {
+  } else if (s_.IsInvalidArgument() &&
+             s_.ToString().substr(0, std::char_traits<char>::length(ErrTypeMessage)) == ErrTypeMessage) {
     res_.SetRes(CmdRes::kMultiKey);
   } else if (s_.IsCorruption() && s_.ToString() == "Corruption: hash value is not an integer") {
     res_.SetRes(CmdRes::kInvalidInt);
@@ -290,9 +287,7 @@ void HIncrbyCmd::Do() {
   }
 }
 
-void HIncrbyCmd::DoThroughDB() {
-  Do();
-}
+void HIncrbyCmd::DoThroughDB() { Do(); }
 
 void HIncrbyCmd::DoUpdateCache() {
   if (s_.ok()) {
@@ -317,7 +312,8 @@ void HIncrbyfloatCmd::Do() {
     res_.AppendStringLenUint64(new_value.size());
     res_.AppendContent(new_value);
     AddSlotKey("h", key_, db_);
-  } else if (s_.IsInvalidArgument() && s_.ToString().substr(0, std::char_traits<char>::length(ErrTypeMessage)) == ErrTypeMessage) {
+  } else if (s_.IsInvalidArgument() &&
+             s_.ToString().substr(0, std::char_traits<char>::length(ErrTypeMessage)) == ErrTypeMessage) {
     res_.SetRes(CmdRes::kMultiKey);
   } else if (s_.IsCorruption() && s_.ToString() == "Corruption: value is not a vaild float") {
     res_.SetRes(CmdRes::kInvalidFloat);
@@ -328,9 +324,7 @@ void HIncrbyfloatCmd::Do() {
   }
 }
 
-void HIncrbyfloatCmd::DoThroughDB() {
-  Do();
-}
+void HIncrbyfloatCmd::DoThroughDB() { Do(); }
 
 void HIncrbyfloatCmd::DoUpdateCache() {
   if (s_.ok()) {
@@ -526,9 +520,7 @@ void HMsetCmd::Do() {
   }
 }
 
-void HMsetCmd::DoThroughDB() {
-  Do();
-}
+void HMsetCmd::DoThroughDB() { Do(); }
 
 void HMsetCmd::DoUpdateCache() {
   if (s_.ok()) {
@@ -559,9 +551,7 @@ void HSetnxCmd::Do() {
   }
 }
 
-void HSetnxCmd::DoThroughDB() {
-  Do();
-}
+void HSetnxCmd::DoThroughDB() { Do(); }
 
 void HSetnxCmd::DoUpdateCache() {
   if (s_.ok()) {
@@ -822,8 +812,8 @@ void PKHScanRangeCmd::DoInitial() {
 void PKHScanRangeCmd::Do() {
   std::string next_field;
   std::vector<storage::FieldValue> field_values;
-  rocksdb::Status s =
-      db_->storage()->PKHScanRange(key_, field_start_, field_end_, pattern_, static_cast<int32_t>(limit_), &field_values, &next_field);
+  rocksdb::Status s = db_->storage()->PKHScanRange(key_, field_start_, field_end_, pattern_,
+                                                   static_cast<int32_t>(limit_), &field_values, &next_field);
 
   if (s.ok() || s.IsNotFound()) {
     res_.AppendArrayLen(2);
@@ -877,8 +867,8 @@ void PKHRScanRangeCmd::DoInitial() {
 void PKHRScanRangeCmd::Do() {
   std::string next_field;
   std::vector<storage::FieldValue> field_values;
-  rocksdb::Status s =
-      db_->storage()->PKHRScanRange(key_, field_start_, field_end_, pattern_, static_cast<int32_t>(limit_), &field_values, &next_field);
+  rocksdb::Status s = db_->storage()->PKHRScanRange(key_, field_start_, field_end_, pattern_,
+                                                    static_cast<int32_t>(limit_), &field_values, &next_field);
 
   if (s_.ok() || s_.IsNotFound()) {
     res_.AppendArrayLen(2);
@@ -891,7 +881,60 @@ void PKHRScanRangeCmd::Do() {
     }
   } else if (s_.IsInvalidArgument()) {
     res_.SetRes(CmdRes::kMultiKey);
-  }  else {
+  } else {
     res_.SetRes(CmdRes::kErrOther, s_.ToString());
   }
 }
+
+void HExpireCmd::DoInitial() {
+  if (!CheckArg(argv_.size())) {
+    res_.SetRes(CmdRes::kWrongNum, kCmdNameHExpire);
+    return;
+  }
+  // hexpire: argv_[0]
+  // key
+  key_ = argv_[1];  // mykey
+  auto iter = argv_.begin();
+  // ttl
+  if (pstd::string2int(argv_[2].data(), argv_[2].size(), &ttl_) == 0) {
+    res_.SetRes(CmdRes::kInvalidInt);
+    return;
+  }
+  // todo: 先不实现 nx xx lt gt, 完成主体，后面在实现。
+
+  // FIELDS
+  iter++;
+  iter++;
+  iter++;
+  iter++;
+  iter++;
+
+  // numfields_
+  if (pstd::string2int(argv_[4].data(), argv_[4].size(), &numfields_) == 0) {
+    res_.SetRes(CmdRes::kInvalidInt);
+    return;
+  }
+
+  // fields
+  fields_.assign(iter, argv_.end());
+}
+
+// 其他的方法暂时不实现。
+void HExpireCmd::Do() {
+  std::vector<int32_t> rets;
+  s_ = db_->storage()->HExpire(key_, ttl_, numfields_, fields_, &rets);
+  // 需要对结果进行解析。
+  if (s_.ok()) {
+    res_.AppendArrayLenUint64(rets.size());
+    for (const auto& ret : rets) {
+      // 可能是负数。不能设置成为1.
+      // res_.AppendStringLenUint64(std::to_string(ret).size());
+      res_.AppendInteger(ret);
+    }
+  } else if (s_.IsInvalidArgument()) {
+    res_.SetRes(CmdRes::kMultiKey);
+  } else {
+    res_.SetRes(CmdRes::kErrOther, s_.ToString());
+  }
+}
+

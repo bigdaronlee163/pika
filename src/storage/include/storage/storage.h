@@ -22,8 +22,8 @@
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
 
-#include "slot_indexer.h"
 #include "pstd/include/pstd_mutex.h"
+#include "slot_indexer.h"
 #include "src/base_data_value_format.h"
 
 namespace storage {
@@ -94,7 +94,7 @@ struct KeyInfo {
 
   KeyInfo(uint64_t k, uint64_t e, uint64_t a, uint64_t i) : keys(k), expires(e), avg_ttl(a), invaild_keys(i) {}
 
-  KeyInfo operator + (const KeyInfo& info) {
+  KeyInfo operator+(const KeyInfo& info) {
     KeyInfo res;
     res.keys = keys + info.keys;
     res.expires = expires + info.expires;
@@ -107,7 +107,7 @@ struct KeyInfo {
 struct ValueStatus {
   std::string value;
   Status status;
-  int64_t  ttl;
+  int64_t ttl;
   bool operator==(const ValueStatus& vs) const { return (vs.value == value && vs.status == status && vs.ttl == ttl); }
 };
 
@@ -153,11 +153,7 @@ enum AGGREGATE { SUM, MIN, MAX };
 
 enum BitOpType { kBitOpAnd = 1, kBitOpOr, kBitOpXor, kBitOpNot, kBitOpDefault };
 
-enum Operation {
-  kNone = 0,
-  kCleanAll,
-  kCompactRange
-};
+enum Operation { kNone = 0, kCleanAll, kCompactRange };
 
 struct BGTask {
   DataType type;
@@ -171,7 +167,7 @@ struct BGTask {
 
 class Storage {
  public:
-  Storage(); // for unit test only
+  Storage();  // for unit test only
   Storage(int db_instance_num, int slot_num, bool is_classic_mode);
   ~Storage();
 
@@ -256,8 +252,8 @@ class Storage {
   // determined by the offsets start and end (both are inclusive)
   Status Getrange(const Slice& key, int64_t start_offset, int64_t end_offset, std::string* ret);
 
-  Status GetrangeWithValue(const Slice& key, int64_t start_offset, int64_t end_offset,
-                           std::string* ret, std::string* value, int64_t* ttl);
+  Status GetrangeWithValue(const Slice& key, int64_t start_offset, int64_t end_offset, std::string* ret,
+                           std::string* value, int64_t* ttl);
 
   // If key already exists and is a string, this command appends the value at
   // the end of the string
@@ -271,7 +267,8 @@ class Storage {
 
   // Perform a bitwise operation between multiple keys
   // and store the result in the destination key
-  Status BitOp(BitOpType op, const std::string& dest_key, const std::vector<std::string>& src_keys, std::string &value_to_dest, int64_t* ret);
+  Status BitOp(BitOpType op, const std::string& dest_key, const std::vector<std::string>& src_keys,
+               std::string& value_to_dest, int64_t* ret);
 
   // Return the position of the first bit set to 1 or 0 in a string
   // BitPos key 0
@@ -348,6 +345,19 @@ class Storage {
   // exist. If key does not exist, a new key holding a hash is created. If field
   // already exists, this operation has no effect.
   Status HSetnx(const Slice& key, const Slice& field, const Slice& value, int32_t* ret);
+
+  Status HExpire(const Slice& key, int32_t ttl, int32_t numfields, const std::vector<std::string>& fields,
+                 std::vector<int32_t>* rets);
+  // Status HExpireat(const Slice& key, const Slice& field, int32_t timestamp);
+  // Status HExpireTime(const Slice& key, const Slice& field);
+
+  // Status HPExpire(const Slice& key, const Slice& field, int32_t ttl);
+  // Status HPExpireat(const Slice& key, const Slice& field, int32_t timestamp);
+  // Status HPExpireTime(const Slice& key, const Slice& field);
+
+  // Status HPersist(const Slice& key, const Slice& field);
+  // Status HTTL(const Slice& key, const Slice& field);
+  // Status HPTTL(const Slice& key, const Slice& field);
 
   // Returns the number of fields contained in the hash stored at key.
   // Return 0 when key does not exist.
@@ -437,7 +447,8 @@ class Storage {
   //   key3 = {a, c, e}
   //   SDIFFSTORE destination key1 key2 key3
   //   destination = {b, d}
-  Status SDiffstore(const Slice& destination, const std::vector<std::string>& keys, std::vector<std::string>& value_to_dest, int32_t* ret);
+  Status SDiffstore(const Slice& destination, const std::vector<std::string>& keys,
+                    std::vector<std::string>& value_to_dest, int32_t* ret);
 
   // Returns the members of the set resulting from the intersection of all the
   // given sets.
@@ -460,7 +471,8 @@ class Storage {
   //   key3 = {a, c, e}
   //   SINTERSTORE destination key1 key2 key3
   //   destination = {a, c}
-  Status SInterstore(const Slice& destination, const std::vector<std::string>& keys, std::vector<std::string>& value_to_dest, int32_t* ret);
+  Status SInterstore(const Slice& destination, const std::vector<std::string>& keys,
+                     std::vector<std::string>& value_to_dest, int32_t* ret);
 
   // Returns if member is a member of the set stored at key.
   Status SIsmember(const Slice& key, const Slice& member, int32_t* ret);
@@ -469,7 +481,7 @@ class Storage {
   // This has the same effect as running SINTER with one argument key.
   Status SMembers(const Slice& key, std::vector<std::string>* members);
 
-  Status SMembersWithTTL(const Slice& key, std::vector<std::string>* members, int64_t *ttl);
+  Status SMembersWithTTL(const Slice& key, std::vector<std::string>* members, int64_t* ttl);
 
   // Remove the specified members from the set stored at key. Specified members
   // that are not a member of this set are ignored. If key does not exist, it is
@@ -519,7 +531,8 @@ class Storage {
   //   key3 = {c, d, e}
   //   SUNIONSTORE destination key1 key2 key3
   //   destination = {a, b, c, d, e}
-  Status SUnionstore(const Slice& destination, const std::vector<std::string>& keys, std::vector<std::string>& value_to_dest, int32_t* ret);
+  Status SUnionstore(const Slice& destination, const std::vector<std::string>& keys,
+                     std::vector<std::string>& value_to_dest, int32_t* ret);
 
   // See SCAN for SSCAN documentation.
   Status SScan(const Slice& key, int64_t cursor, const std::string& pattern, int64_t count,
@@ -542,7 +555,7 @@ class Storage {
   // (the head of the list), 1 being the next element and so on.
   Status LRange(const Slice& key, int64_t start, int64_t stop, std::vector<std::string>* ret);
 
-  Status LRangeWithTTL(const Slice& key, int64_t start, int64_t stop, std::vector<std::string>* ret, int64_t *ttl);
+  Status LRangeWithTTL(const Slice& key, int64_t start, int64_t stop, std::vector<std::string>* ret, int64_t* ttl);
 
   // Removes the first count occurrences of elements equal to value from the
   // list stored at key. The count argument influences the operation in the
@@ -705,7 +718,7 @@ class Storage {
   Status ZRange(const Slice& key, int32_t start, int32_t stop, std::vector<ScoreMember>* score_members);
 
   Status ZRangeWithTTL(const Slice& key, int32_t start, int32_t stop, std::vector<ScoreMember>* score_members,
-                                int64_t *ttl);
+                       int64_t* ttl);
 
   // Returns all the elements in the sorted set at key with a score between min
   // and max (including elements with score equal to min or max). The elements
@@ -952,7 +965,7 @@ class Storage {
   Status XLen(const Slice& key, int32_t& len);
   Status XRead(const StreamReadGroupReadArgs& args, std::vector<std::vector<storage::IdMessage>>& results,
                std::vector<std::string>& reserved_keys);
-  Status XInfo(const Slice& key, StreamInfoResult &result);
+  Status XInfo(const Slice& key, StreamInfoResult& result);
   // Keys Commands
 
   // Note:
@@ -991,7 +1004,8 @@ class Storage {
 
   // Traverses the database of the specified type, removing the Key that matches
   // the pattern
-  Status PKPatternMatchDelWithRemoveKeys(const std::string& pattern, int64_t* ret, std::vector<std::string>* remove_keys, const int64_t& max_count);
+  Status PKPatternMatchDelWithRemoveKeys(const std::string& pattern, int64_t* ret,
+                                         std::vector<std::string>* remove_keys, const int64_t& max_count);
 
   // Iterate over a collection of elements
   // return next_key that the user need to use as the start_key argument
@@ -1093,10 +1107,10 @@ class Storage {
   Status SetOptions(const OptionType& option_type, const std::string& db_type,
                     const std::unordered_map<std::string, std::string>& options);
   void SetCompactRangeOptions(const bool is_canceled);
-  Status EnableDymayticOptions(const OptionType& option_type, 
-                    const std::string& db_type, const std::unordered_map<std::string, std::string>& options);
-  Status EnableAutoCompaction(const OptionType& option_type,
-                    const std::string& db_type, const std::unordered_map<std::string, std::string>& options);
+  Status EnableDymayticOptions(const OptionType& option_type, const std::string& db_type,
+                               const std::unordered_map<std::string, std::string>& options);
+  Status EnableAutoCompaction(const OptionType& option_type, const std::string& db_type,
+                              const std::unordered_map<std::string, std::string>& options);
   void GetRocksDBInfo(std::string& info);
 
  private:

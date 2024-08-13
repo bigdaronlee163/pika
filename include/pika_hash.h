@@ -444,4 +444,37 @@ class PKHRScanRangeCmd : public Cmd {
     limit_ = 10;
   }
 };
+
+class HExpireCmd : public Cmd {
+ public:
+  HExpireCmd(const std::string& name, int arity, uint32_t flag)
+      : Cmd(name, arity, flag, static_cast<uint32_t>(AclCategory::HASH)) {}
+  std::vector<std::string> current_key() const override {
+    std::vector<std::string> res;
+    res.push_back(key_);
+    return res;
+  }
+  void Do() override;
+  void Split(const HintKeys& hint_keys) override {};
+  void Merge() override {};
+  Cmd* Clone() override { return new HExpireCmd(*this); }
+
+ private:
+  std::string key_;
+  int64_t ttl_ = 0;
+  int64_t numfields_ = 0;
+  std::vector<std::string> fields_;
+
+  rocksdb::Status s_;
+
+  // std::string pattern_ = "*";
+  // int64_t limit_ = 10;
+  void DoInitial() override;
+  void Clear() override {
+    // pattern_ = "*";
+    // limit_ = 10;
+  }
+};
+
+
 #endif

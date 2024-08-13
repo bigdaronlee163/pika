@@ -259,7 +259,7 @@ void PikaClientConn::ProcessMonitor(const PikaCmdArgsType& argv) {
 }
 
 bool PikaClientConn::IsInterceptedByRTC(std::string& opt) {
-  //currently we only Intercept: Get, HGet
+  // currently we only Intercept: Get, HGet
   if (opt == kCmdNameGet && g_pika_conf->GetCacheString()) {
     return true;
   }
@@ -290,11 +290,9 @@ void PikaClientConn::ProcessRedisCmds(const std::vector<net::RedisCmdArgsType>& 
     bool is_slow_cmd = g_pika_conf->is_slow_cmd(opt);
     bool is_admin_cmd = g_pika_conf->is_admin_cmd(opt);
 
-    //we don't intercept pipeline batch (argvs.size() > 1)
-    if (g_pika_conf->rtc_cache_read_enabled() &&
-        argvs.size() == 1 && IsInterceptedByRTC(opt) &&
-        PIKA_CACHE_NONE != g_pika_conf->cache_mode() &&
-        !IsInTxn()) {
+    // we don't intercept pipeline batch (argvs.size() > 1)
+    if (g_pika_conf->rtc_cache_read_enabled() && argvs.size() == 1 && IsInterceptedByRTC(opt) &&
+        PIKA_CACHE_NONE != g_pika_conf->cache_mode() && !IsInTxn()) {
       // read in cache
       if (ReadCmdInCache(argvs[0], opt)) {
         delete arg;
@@ -332,6 +330,7 @@ void PikaClientConn::DoBackgroundTask(void* arg) {
 void PikaClientConn::BatchExecRedisCmd(const std::vector<net::RedisCmdArgsType>& argvs, bool cache_miss_in_rtc) {
   resp_num.store(static_cast<int32_t>(argvs.size()));
   for (const auto& argv : argvs) {
+    // 构建一个std::shared_ptr<std::string>，用于存储命令执行结果。
     std::shared_ptr<std::string> resp_ptr = std::make_shared<std::string>();
     resp_array.push_back(resp_ptr);
     // 调用 ExecRedisCmd 进行命令的具体处理。
@@ -356,21 +355,17 @@ bool PikaClientConn::ReadCmdInCache(const net::RedisCmdArgsType& argv, const std
   }
   // Initial
   c_ptr->Initial(argv, current_db_);
-  //acl check
+  // acl check
   int8_t subCmdIndex = -1;
   std::string errKey;
   auto checkRes = user_->CheckUserPermission(c_ptr, argv, subCmdIndex, &errKey);
   std::string object;
-  if (checkRes == AclDeniedCmd::CMD ||
-      checkRes == AclDeniedCmd::KEY ||
-      checkRes == AclDeniedCmd::CHANNEL ||
-      checkRes == AclDeniedCmd::NO_SUB_CMD ||
-      checkRes == AclDeniedCmd::NO_AUTH
-      ) {
-    //acl check failed
+  if (checkRes == AclDeniedCmd::CMD || checkRes == AclDeniedCmd::KEY || checkRes == AclDeniedCmd::CHANNEL ||
+      checkRes == AclDeniedCmd::NO_SUB_CMD || checkRes == AclDeniedCmd::NO_AUTH) {
+    // acl check failed
     return false;
   }
-  //only read command(Get, HGet) will reach here, no need of record lock
+  // only read command(Get, HGet) will reach here, no need of record lock
   bool read_status = c_ptr->DoReadCommandInCache();
   auto cmdstat_map = g_pika_cmd_table_manager->GetCommandStatMap();
   resp_num--;
@@ -387,7 +382,7 @@ bool PikaClientConn::ReadCmdInCache(const net::RedisCmdArgsType& argv, const std
 void PikaClientConn::TryWriteResp() {
   int expected = 0;
   if (resp_num.compare_exchange_strong(expected, -1)) {
-    // WriteResp 为Redisconn中的方法。 
+    // WriteResp 为Redisconn中的方法。
     for (auto& resp : resp_array) {
       WriteResp(*resp);
     }

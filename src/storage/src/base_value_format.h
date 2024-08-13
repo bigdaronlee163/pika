@@ -18,11 +18,20 @@
 
 namespace storage {
 
-enum class DataType : uint8_t { kStrings = 0, kHashes = 1, kSets = 2, kLists = 3, kZSets = 4, kStreams = 5, kNones = 6, kAll = 7 };
+enum class DataType : uint8_t {
+  kStrings = 0,
+  kHashes = 1,
+  kSets = 2,
+  kLists = 3,
+  kZSets = 4,
+  kStreams = 5,
+  kNones = 6,
+  kAll = 7
+};
 constexpr int DataTypeNum = int(DataType::kNones);
 
-constexpr char DataTypeTag[] = { 'k', 'h', 's', 'l', 'z', 'x', 'n', 'a'};
-constexpr char* DataTypeStrings[] = { "string", "hash", "set", "list", "zset", "streams", "none", "all"};
+constexpr char DataTypeTag[] = {'k', 'h', 's', 'l', 'z', 'x', 'n', 'a'};
+constexpr char* DataTypeStrings[] = {"string", "hash", "set", "list", "zset", "streams", "none", "all"};
 // 通过将枚举类 DataType 转成可读性更好的字符串，来方便调试。
 constexpr char* DataTypeToString(DataType type) {
   if (type < DataType::kStrings || type > DataType::kNones) {
@@ -45,14 +54,14 @@ constexpr char DataTypeToTag(DataType type) {
 }
 
 class InternalValue {
-public:
-  // 还是更新了一些东西的。 和xcache 还是存在区别的。 
- explicit InternalValue(DataType type, const rocksdb::Slice& user_value) : type_(type), user_value_(user_value) {
-   // 利用构造函数，设置创建的时间。
-   ctime_ = pstd::NowMicros() / 1e6;
- }
+ public:
+  // 还是更新了一些东西的。 和xcache 还是存在区别的。
+  explicit InternalValue(DataType type, const rocksdb::Slice& user_value) : type_(type), user_value_(user_value) {
+    // 利用构造函数，设置创建的时间。
+    ctime_ = pstd::NowMicros() / 1e6;
+  }
 
- virtual ~InternalValue() {
+  virtual ~InternalValue() {
     if (start_ != space_) {
       delete[] start_;
     }
@@ -61,6 +70,7 @@ public:
   void setCtime(uint64_t ctime) { ctime_ = ctime; }
   // 设置过期时间。
   // 这个可以用在hash的过期实现上面。
+  // 直接将过期时间，设置到value的后面的etime字段中了。
   rocksdb::Status SetRelativeTimestamp(int64_t ttl) {
     int64_t unix_time;
     rocksdb::Env::Default()->GetCurrentTime(&unix_time);
@@ -85,7 +95,7 @@ public:
 
   virtual rocksdb::Slice Encode() = 0;
 
-protected:
+ protected:
   char space_[200];
   char* start_ = nullptr;
   rocksdb::Slice user_value_;
@@ -98,7 +108,7 @@ protected:
 // 解析出来的内部value.
 // 定义了很多虚函数，用于不同的数据结构。 比如hash，set，list，zset，stream等。
 class ParsedInternalValue {
-public:
+ public:
   // Use this constructor after rocksdb::DB::Get(), since we use this in
   // the implement of user interfaces and may need to modify the
   // original value suffix, so the value_ must point to the string
@@ -132,7 +142,8 @@ public:
     ctime_ = ctime;
     SetCtimeToValue();
   }
-
+  // 虽然base value 没有 etiem ，但是 internal value存在。 【但是没有编码 Encode 进去】
+  // 可以利用 internal value的etime，来判断是否过期。
   void SetRelativeTimestamp(int64_t ttl) {
     int64_t unix_time;
     rocksdb::Env::Default()->GetCurrentTime(&unix_time);
@@ -141,7 +152,7 @@ public:
   }
 
   bool IsPermanentSurvival() { return etime_ == 0; }
-  // 判断健是否过期。通过etime是否小于当前的时间（相对时间和绝对时间，都是通过对比过期的时间和当前时间的大小。）  
+  // 判断健是否过期。通过etime是否小于当前的时间（相对时间和绝对时间，都是通过对比过期的时间和当前时间的大小。）
   bool IsStale() {
     if (etime_ == 0) {
       return false;
@@ -151,23 +162,21 @@ public:
     return etime_ < unix_time;
   }
 
-  virtual bool IsValid() {
-    return !IsStale();
-  }
+  virtual bool IsValid() { return !IsStale(); }
 
   virtual void StripSuffix() = 0;
 
-protected:
+ protected:
   virtual void SetVersionToValue() = 0;
   virtual void SetEtimeToValue() = 0;
   virtual void SetCtimeToValue() = 0;
   std::string* value_ = nullptr;
   rocksdb::Slice user_value_;
-  uint64_t version_ = 0 ;
+  uint64_t version_ = 0;
   uint64_t ctime_ = 0;
   uint64_t etime_ = 0;
   DataType type_;
-  char reserve_[16] = {0}; //unused
+  char reserve_[16] = {0};  // unused
 };
 
 }  //  namespace storage

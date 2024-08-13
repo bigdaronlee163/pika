@@ -138,7 +138,7 @@ class ParsedBaseMetaValue : public ParsedInternalValue {
       EncodeFixed64(dst, ctime_);
     }
   }
-
+  // 得看下value的存储和实现了。
   void SetEtimeToValue() override {
     if (value_) {
       char* dst = const_cast<char*>(value_->data()) + value_->size() - kTimestampLength;

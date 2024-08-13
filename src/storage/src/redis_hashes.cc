@@ -74,6 +74,7 @@ Status Redis::HDel(const Slice& key, const std::vector<std::string>& fields, int
   std::unordered_set<std::string> field_set;
   for (const auto& iter : fields) {
     const std::string& field = iter;
+    // 正常的迭代，没有像后面反向迭代。
     if (field_set.find(field) == field_set.end()) {
       field_set.insert(field);  // set去除重复的字段。
       filtered_fields.push_back(iter);
@@ -146,9 +147,9 @@ Status Redis::HDel(const Slice& key, const std::vector<std::string>& fields, int
         }
       }
       *ret = del_cnt;
-      // key中的field删除。
+      // key中的field删除。【更新key中的元素的数量。】
       if (!parsed_hashes_meta_value.CheckModifyCount(-del_cnt)) {
-        // 这是为什么呢？
+        // 这是为什么呢？【避免超出最大size的限制】
         return Status::InvalidArgument("hash size overflow");
       }
       parsed_hashes_meta_value.ModifyCount(-del_cnt);
@@ -213,11 +214,16 @@ Status Redis::HGet(const Slice& key, const Slice& field, std::string* value) {
       HashesDataKey data_key(key, version, field);
       s = db_->Get(read_options, handles_[kHashesDataCF], data_key.Encode(), value);
       if (s.ok()) {
+        // value是一个指针。 通过将value包装，调用其方法。
         ParsedBaseDataValue parsed_internal_value(value);
+        if (parsed_internal_value.IsStale()) {
+          return Status::NotFound("Stale");
+        }
         parsed_internal_value.StripSuffix();
       }
     }
   }
+  // 这里有用到。s = Status::NotFound();
   return s;
 }
 
@@ -262,6 +268,7 @@ Status Redis::HGetall(const Slice& key, std::vector<FieldValue>* fvs) {
         ParsedHashesDataKey parsed_hashes_data_key(iter->key());
         ParsedBaseDataValue parsed_internal_value(iter->value());
         // fvs 入参，用于返回参数。
+        // 从key中返回field  从 value中返回value
         fvs->push_back({parsed_hashes_data_key.field().ToString(), parsed_internal_value.UserValue().ToString()});
       }
       delete iter;
@@ -635,7 +642,7 @@ Status Redis::HMGet(const Slice& key, const std::vector<std::string>& fields, st
   read_options.snapshot = snapshot;
   // 通过 metakey 和 cf 获取元信息。
   BaseMetaKey base_meta_key(key);
-  Status s = db_->Get(read_options, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
+  Status s = db_->Get(read_options, handles_[kHashesDataCF], base_meta_key.Encode(), &meta_value);
   if (s.ok() && !ExpectedMetaValue(DataType::kHashes, meta_value)) {
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
@@ -716,6 +723,7 @@ Status Redis::HMSet(const Slice& key, const std::vector<FieldValue>& fvs) {
   // key是存在的。
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
+    // key 存在但是过期了，或者key没有对应具体的元素。  写入过程，类似于 key 不存在的情况。
     if (parsed_hashes_meta_value.IsStale() || parsed_hashes_meta_value.Count() == 0) {
       version = parsed_hashes_meta_value.InitialMetaValue();
       // 最多支持 INT32_MAX 个 filed value
@@ -731,14 +739,18 @@ Status Redis::HMSet(const Slice& key, const std::vector<FieldValue>& fvs) {
         HashesDataKey hashes_data_key(key, version, fv.field);
         // set的时候，需要往里面㝍。需要构建一个新的 baseData
         BaseDataValue inter_value(fv.value);
+        // 都存放到 batch 中，等下一起写入。
         batch.Put(handles_[kHashesDataCF], hashes_data_key.Encode(), inter_value.Encode());
       }
-      // 都存放到 batch 中，等下一起写入。
+
     } else {
+      // key 是存在的，但是需要更新或者新增 field value。
       int32_t count = 0;
       std::string data_value;
+      // 更新版本。（旧版本会被剔除。）
       version = parsed_hashes_meta_value.Version();
       for (const auto& fv : filtered_fvs) {
+        // 查询 field 是否存在。
         HashesDataKey hashes_data_key(key, version, fv.field);
         BaseDataValue inter_value(fv.value);
         s = db_->Get(default_read_options_, handles_[kHashesDataCF], hashes_data_key.Encode(), &data_value);
@@ -762,16 +774,22 @@ Status Redis::HMSet(const Slice& key, const std::vector<FieldValue>& fvs) {
     }
     // key是不存在的。
   } else if (s.IsNotFound()) {
+    // char * 等价于 char []
     EncodeFixed32(meta_value_buf, filtered_fvs.size());
+    // 构建 meta_value
     HashesMetaValue hashes_meta_value(DataType::kHashes, Slice(meta_value_buf, 4));
+    // 更新或者创建版本信息。
     version = hashes_meta_value.UpdateVersion();
+    // 创建 meta_value
     batch.Put(handles_[kMetaCF], base_meta_key.Encode(), hashes_meta_value.Encode());
+    // 依次存储 field value
     for (const auto& fv : filtered_fvs) {
       HashesDataKey hashes_data_key(key, version, fv.field);
       BaseDataValue inter_value(fv.value);
       batch.Put(handles_[kHashesDataCF], hashes_data_key.Encode(), inter_value.Encode());
     }
   }
+  // 批量写入。
   s = db_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(DataType::kHashes, key.ToString(), statistic);
   return s;
@@ -797,17 +815,23 @@ Status Redis::HSet(const Slice& key, const Slice& field, const Slice& value, int
                                      ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
+  // key 存在
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
+    // key 存在，但是过期或者里面没有元素。
     if (parsed_hashes_meta_value.IsStale() || parsed_hashes_meta_value.Count() == 0) {
       version = parsed_hashes_meta_value.InitialMetaValue();
       parsed_hashes_meta_value.SetCount(1);
       batch.Put(handles_[kMetaCF], base_meta_key.Encode(), meta_value);
       HashesDataKey data_key(key, version, field);
       BaseDataValue internal_value(value);
+
+      // internal_value.SetEtime(111);  // DDD
+
       batch.Put(handles_[kHashesDataCF], data_key.Encode(), internal_value.Encode());
       *res = 1;
     } else {
+      // key存在，且里面还有元素。
       version = parsed_hashes_meta_value.Version();
       std::string data_value;
       HashesDataKey hashes_data_key(key, version, field);
@@ -820,6 +844,9 @@ Status Redis::HSet(const Slice& key, const Slice& field, const Slice& value, int
           // 使用value，构建出 db 需要的 key  value
           // key 使用  hashes_data_key(key, version, field); 构成。
           BaseDataValue internal_value(value);
+
+          // internal_value.SetEtime(111);  // DDD
+
           batch.Put(handles_[kHashesDataCF], hashes_data_key.Encode(), internal_value.Encode());
           statistic++;
         }
@@ -829,6 +856,9 @@ Status Redis::HSet(const Slice& key, const Slice& field, const Slice& value, int
         }
         parsed_hashes_meta_value.ModifyCount(1);
         BaseDataValue internal_value(value);
+
+        // internal_value.SetEtime(111);  // DDD
+
         batch.Put(handles_[kMetaCF], base_meta_key.Encode(), meta_value);
         batch.Put(handles_[kHashesDataCF], hashes_data_key.Encode(), internal_value.Encode());
         *res = 1;
@@ -843,12 +873,28 @@ Status Redis::HSet(const Slice& key, const Slice& field, const Slice& value, int
     batch.Put(handles_[kMetaCF], base_meta_key.Encode(), hashes_meta_value.Encode());
     HashesDataKey data_key(key, version, field);
     BaseDataValue internal_value(value);
+
+    // internal_value.SetEtime(111);  // DDD
+
     batch.Put(handles_[kHashesDataCF], data_key.Encode(), internal_value.Encode());
     *res = 1;
   } else {
     return s;
   }
   s = db_->Write(default_write_options_, &batch);
+
+  std::string* temp_value;
+  HashesDataKey data_key(key, version, field);
+  s = db_->Get(default_read_options_, handles_[kHashesDataCF], data_key.Encode(), temp_value);
+  if (s.ok()) {
+    // value是一个指针。 通过将value包装，调用其方法。
+    ParsedBaseDataValue parsed_internal_value(temp_value);
+    if (parsed_internal_value.IsStale()) {
+      return Status::NotFound("Stale");
+    }
+    parsed_internal_value.StripSuffix();
+  }
+
   UpdateSpecificKeyStatistics(DataType::kHashes, key.ToString(), statistic);
   return s;
 }
@@ -916,39 +962,129 @@ Status Redis::HSetnx(const Slice& key, const Slice& field, const Slice& value, i
 }
 
 // TODO 整个流程先走通。
-Status Redis::HExpire(const Slice& key, int32_t sec, int32_t numfields, const std::vector<std::string>& fields,
-                      int32_t* ret) {
-  // return Status::OK();
-  *ret = 1;
-  return Status::InvalidArgument("hash size overflow");
+/*
+- `-2` if no such field exists in the provided hash key, or the provided key does not exist.
+- `0` if the specified NX | XX | GT | LT condition has not been met.
+- `1` if the expiration time was set/updated.
+- `2` when `HEXPIRE`/`HPEXPIRE` is called with 0 seconds/milliseconds or when `HEXPIREAT`/`HPEXPIREAT` is called with a
+past Unix time in seconds/milliseconds.
+
+*/
+Status Redis::HExpire(const Slice& key, int32_t ttl, int32_t numfields, const std::vector<std::string>& fields,
+                      std::vector<int32_t>* rets) {
+  if (ttl <= 0) {
+    // 非法情况，不对rets赋值。
+    // *ret = 2;
+    return Status::InvalidArgument("invalid expire time, must be >= 0");
+  }
+
+  rocksdb::WriteBatch batch;
+  ScopeRecordLock l(lock_mgr_, key);
+
+  bool is_stale = false;
+  int32_t version = 0;
+  std::string meta_value;
+
+  // rocksdb::ReadOptions read_options;
+  const rocksdb::Snapshot* snapshot;
+  ScopeSnapshot ss(db_, &snapshot);
+
+  BaseMetaKey base_meta_key(key);
+  Status s = db_->Get(default_read_options_, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
+
+  if (s.ok() && !ExpectedMetaValue(DataType::kHashes, meta_value)) {
+    if (ExpectedStale(meta_value)) {
+      s = Status::NotFound();
+    } else {
+      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
+                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
+                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
+    }
+  }
+  if (s.ok()) {
+    ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
+    // not found 有两种结果，过期或者count为0.
+    if (parsed_hashes_meta_value.IsStale()) {
+      // *ret = -2;
+      return Status::NotFound("Stale");
+    } else if (parsed_hashes_meta_value.Count() == 0) {
+      // *ret = -2;
+      return Status::NotFound();
+    } else {
+      version = parsed_hashes_meta_value.Version();
+
+      for (const auto& field : fields) {
+        HashesDataKey data_key(key, version, field);
+        std::string data_value;
+        s = db_->Get(default_read_options_, handles_[kHashesDataCF], data_key.Encode(), &data_value);
+        if (s.ok()) {
+          ParsedBaseDataValue parsed_internal_value(&data_value);
+          // 存在一个过期，就直接返回。
+          if (parsed_internal_value.IsStale()) {
+            // *ret = 0;
+            rets->push_back(-2);
+            // return Status::NotFound("Stale");
+          } else {
+            rets->push_back(1);
+            // 修改过期时间。
+            // 怎么保证这个修改生效。 
+            parsed_internal_value.SetRelativeTimestamp(ttl);
+            batch.Put(handles_[kHashesDataCF], data_key.Encode(), data_value);
+          }
+        }
+
+        s = db_->Write(default_write_options_, &batch);
+
+        s = db_->Get(default_read_options_, handles_[kHashesDataCF], data_key.Encode(), &data_value);
+        if (s.ok()) {
+          ParsedBaseDataValue parsed_internal_value(&data_value);
+          // 存在一个过期，就直接返回。
+          if (parsed_internal_value.IsStale()) {
+            // for test
+          }
+        }
+      }
+      s = db_->Write(default_write_options_, &batch);
+
+      return s;
+    }
+  } else if (s.IsNotFound()) {
+    return Status::NotFound(is_stale ? "Stale" : "111");
+  }
+  return s;
 }
 
-// Status HExpireat(const Slice& key, const Slice& field, int32_t timestamp){
-// }
 
-// Status HExpireTime(const Slice& key, const Slice& field){
 
-// }
+  // Status HExpireat(const Slice& key, const Slice& field, int32_t timestamp){
+  // }
 
-// Status HPExpire(const Slice& key, const Slice& field, int32_t ttl){
-// }
+  // Status HExpireTime(const Slice& key, const Slice& field){
 
-// Status HPExpireat(const Slice& key, const Slice& field, int32_t timestamp){
-// }
+  // }
 
-// Status HPExpireTime(const Slice& key, const Slice& field){
-// }
+  // Status HPExpire(const Slice& key, const Slice& field, int32_t ttl){
+  // }
 
-// Status HPersist(const Slice& key, const Slice& field){
-// }
+  // Status HPExpireat(const Slice& key, const Slice& field, int32_t timestamp){
+  // }
 
-// Status HTTL(const Slice& key, const Slice& field){
-// }
+  // Status HPExpireTime(const Slice& key, const Slice& field){
+  // }
 
-// Status HPTTL(const Slice& key, const Slice& field){
-// }
 
-// 和 hkeys对应，获取所有的 vals
+  // Status HPersist(const Slice& key, const Slice& field){
+  // }
+
+  // Status HTTL(const Slice& key, const Slice& field){
+  // }
+
+  // Status HPTTL(const Slice& key, const Slice& field){
+  // }
+
+
+
+
 Status Redis::HVals(const Slice& key, std::vector<std::string>* values) {
   rocksdb::ReadOptions read_options;
   const rocksdb::Snapshot* snapshot;
@@ -964,9 +1100,6 @@ Status Redis::HVals(const Slice& key, std::vector<std::string>* values) {
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
-                                     ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
-                                     ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
       return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
                                      ", expect type: " + DataTypeStrings[static_cast<int>(DataType::kHashes)] +
                                      ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
