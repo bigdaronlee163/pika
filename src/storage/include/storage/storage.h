@@ -22,9 +22,10 @@
 #include "rocksdb/status.h"
 #include "rocksdb/table.h"
 
-#include "slot_indexer.h"
 #include "pstd/include/pstd_mutex.h"
+#include "slot_indexer.h"
 #include "src/base_data_value_format.h"
+#include "src/pkhash_data_value_format.h"
 
 namespace storage {
 
@@ -94,7 +95,7 @@ struct KeyInfo {
 
   KeyInfo(uint64_t k, uint64_t e, uint64_t a, uint64_t i) : keys(k), expires(e), avg_ttl(a), invaild_keys(i) {}
 
-  KeyInfo operator + (const KeyInfo& info) {
+  KeyInfo operator+(const KeyInfo& info) {
     KeyInfo res;
     res.keys = keys + info.keys;
     res.expires = expires + info.expires;
@@ -118,6 +119,13 @@ struct FieldValue {
   FieldValue(const std::string& k, const std::string& v) : field(k), value(v) {}
   FieldValue(std::string&& k, std::string&& v) : field(std::move(k)), value(std::move(v)) {}
   bool operator==(const FieldValue& fv) const { return (fv.field == field && fv.value == value); }
+};
+
+struct FieldValueTTL {
+  std::string field;
+  std::string value;
+  int32_t ttl;
+  bool operator==(const FieldValueTTL& fv) const { return (fv.field == field && fv.value == value && fv.ttl == ttl); }
 };
 
 struct IdMessage {
@@ -153,11 +161,7 @@ enum AGGREGATE { SUM, MIN, MAX };
 
 enum BitOpType { kBitOpAnd = 1, kBitOpOr, kBitOpXor, kBitOpNot, kBitOpDefault };
 
-enum Operation {
-  kNone = 0,
-  kCleanAll,
-  kCompactRange
-};
+enum Operation { kNone = 0, kCleanAll, kCompactRange };
 
 struct BGTask {
   DataType type;
@@ -171,7 +175,7 @@ struct BGTask {
 
 class Storage {
  public:
-  Storage(); // for unit test only
+  Storage();  // for unit test only
   Storage(int db_instance_num, int slot_num, bool is_classic_mode);
   ~Storage();
 
@@ -271,7 +275,8 @@ class Storage {
 
   // Perform a bitwise operation between multiple keys
   // and store the result in the destination key
-  Status BitOp(BitOpType op, const std::string& dest_key, const std::vector<std::string>& src_keys, std::string &value_to_dest, int64_t* ret);
+  Status BitOp(BitOpType op, const std::string& dest_key, const std::vector<std::string>& src_keys,
+               std::string& value_to_dest, int64_t* ret);
 
   // Return the position of the first bit set to 1 or 0 in a string
   // BitPos key 0
@@ -406,6 +411,51 @@ class Storage {
   Status PKHRScanRange(const Slice& key, const Slice& field_start, const std::string& field_end, const Slice& pattern,
                        int32_t limit, std::vector<FieldValue>* field_values, std::string* next_field);
 
+  // Pika Hash Commands
+
+  Status PKHExpire(const Slice& key, int32_t ttl, int32_t numfields, const std::vector<std::string>& fields,
+                   std::vector<int32_t>* rets);
+  Status PKHExpireat(const Slice& key, int64_t timestamp, int32_t numfields, const std::vector<std::string>& fields,
+                     std::vector<int32_t>* rets);
+  Status PKHExpiretime(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
+                       std::vector<int64_t>* timestamps);
+
+  Status PKHPersist(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
+                    std::vector<int32_t>* rets);
+  Status PKHTTL(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
+                std::vector<int64_t>* ttls);
+
+  Status PKHSet(const Slice& key, const Slice& field, const Slice& value, int32_t* res);
+
+  Status PKHGet(const Slice& key, const Slice& field, std::string* value);
+
+  Status PKHSetex(const Slice& key, const Slice& field, const Slice& value, int32_t ttl, int32_t* ret);
+
+  Status PKHExists(const Slice& key, const Slice& field);
+
+  Status PKHDel(const Slice& key, const std::vector<std::string>& fields, int32_t* ret);
+
+  Status PKHLen(const Slice& key, int32_t* ret);
+
+  Status PKHStrlen(const Slice& key, const Slice& field, int32_t* len);
+
+  Status PKHIncrby(const Slice& key, const Slice& field, int64_t value, int64_t* ret, int32_t ttl = 0);
+
+  Status PKHMSet(const Slice& key, const std::vector<FieldValue>& fvs);
+
+  Status PKHMSetex(const Slice& key, const std::vector<FieldValueTTL>& fvts);
+
+  Status PKHMGet(const Slice& key, const std::vector<std::string>& fields, std::vector<ValueStatus>* vss);
+
+  Status PKHKeys(const Slice& key, std::vector<std::string>* fields);
+
+  Status PKHVals(const Slice& key, std::vector<std::string>* values);
+
+  Status PKHGetall(const Slice& key, std::vector<FieldValueTTL>* fvts);
+
+  Status PKHScan(const Slice& key, int64_t cursor, const std::string& pattern, int64_t count,
+                 std::vector<FieldValueTTL>* fvts, int64_t* next_cursor);
+
   // Sets Commands
 
   // Add the specified members to the set stored at key. Specified members that
@@ -437,7 +487,8 @@ class Storage {
   //   key3 = {a, c, e}
   //   SDIFFSTORE destination key1 key2 key3
   //   destination = {b, d}
-  Status SDiffstore(const Slice& destination, const std::vector<std::string>& keys, std::vector<std::string>& value_to_dest, int32_t* ret);
+  Status SDiffstore(const Slice& destination, const std::vector<std::string>& keys,
+                    std::vector<std::string>& value_to_dest, int32_t* ret);
 
   // Returns the members of the set resulting from the intersection of all the
   // given sets.
@@ -460,7 +511,8 @@ class Storage {
   //   key3 = {a, c, e}
   //   SINTERSTORE destination key1 key2 key3
   //   destination = {a, c}
-  Status SInterstore(const Slice& destination, const std::vector<std::string>& keys, std::vector<std::string>& value_to_dest, int32_t* ret);
+  Status SInterstore(const Slice& destination, const std::vector<std::string>& keys,
+                     std::vector<std::string>& value_to_dest, int32_t* ret);
 
   // Returns if member is a member of the set stored at key.
   Status SIsmember(const Slice& key, const Slice& member, int32_t* ret);
@@ -519,7 +571,8 @@ class Storage {
   //   key3 = {c, d, e}
   //   SUNIONSTORE destination key1 key2 key3
   //   destination = {a, b, c, d, e}
-  Status SUnionstore(const Slice& destination, const std::vector<std::string>& keys, std::vector<std::string>& value_to_dest, int32_t* ret);
+  Status SUnionstore(const Slice& destination, const std::vector<std::string>& keys,
+                     std::vector<std::string>& value_to_dest, int32_t* ret);
 
   // See SCAN for SSCAN documentation.
   Status SScan(const Slice& key, int64_t cursor, const std::string& pattern, int64_t count,
@@ -952,7 +1005,7 @@ class Storage {
   Status XLen(const Slice& key, int32_t& len);
   Status XRead(const StreamReadGroupReadArgs& args, std::vector<std::vector<storage::IdMessage>>& results,
                std::vector<std::string>& reserved_keys);
-  Status XInfo(const Slice& key, StreamInfoResult &result);
+  Status XInfo(const Slice& key, StreamInfoResult& result);
   // Keys Commands
 
   // Note:
@@ -968,7 +1021,6 @@ class Storage {
   // return -1 operation exception errors happen in database
   // return >=0 the number of keys that were removed
   int64_t Del(const std::vector<std::string>& keys);
-
 
   // Iterate over a collection of elements
   // return an updated cursor that the user need to use as the cursor argument
@@ -988,7 +1040,8 @@ class Storage {
 
   // Traverses the database of the specified type, removing the Key that matches
   // the pattern
-  Status PKPatternMatchDelWithRemoveKeys(const std::string& pattern, int64_t* ret, std::vector<std::string>* remove_keys, const int64_t& max_count);
+  Status PKPatternMatchDelWithRemoveKeys(const std::string& pattern, int64_t* ret,
+                                         std::vector<std::string>* remove_keys, const int64_t& max_count);
 
   // Iterate over a collection of elements
   // return next_key that the user need to use as the start_key argument
@@ -1097,10 +1150,10 @@ class Storage {
   Status SetOptions(const OptionType& option_type, const std::string& db_type,
                     const std::unordered_map<std::string, std::string>& options);
   void SetCompactRangeOptions(const bool is_canceled);
-  Status EnableDymayticOptions(const OptionType& option_type, 
-                    const std::string& db_type, const std::unordered_map<std::string, std::string>& options);
-  Status EnableAutoCompaction(const OptionType& option_type,
-                    const std::string& db_type, const std::unordered_map<std::string, std::string>& options);
+  Status EnableDymayticOptions(const OptionType& option_type, const std::string& db_type,
+                               const std::unordered_map<std::string, std::string>& options);
+  Status EnableAutoCompaction(const OptionType& option_type, const std::string& db_type,
+                              const std::unordered_map<std::string, std::string>& options);
   void GetRocksDBInfo(std::string& info);
 
   // get hash cf handle in insts_[idx]
