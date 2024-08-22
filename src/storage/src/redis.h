@@ -14,17 +14,17 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/status.h"
 
+#include "pstd/include/env.h"
+#include "pstd/include/pika_codis_slot.h"
+#include "src/custom_comparator.h"
 #include "src/debug.h"
 #include "src/lock_mgr.h"
 #include "src/lru_cache.h"
 #include "src/mutex_impl.h"
+#include "src/redis_streams.h"
 #include "src/type_iterator.h"
-#include "src/custom_comparator.h"
 #include "storage/storage.h"
 #include "storage/storage_define.h"
-#include "pstd/include/env.h"
-#include "src/redis_streams.h"
-#include "pstd/include/pika_codis_slot.h"
 
 #define SPOP_COMPACT_THRESHOLD_COUNT 500
 #define SPOP_COMPACT_THRESHOLD_DURATION (1000 * 1000)  // 1000ms
@@ -57,7 +57,7 @@ class Redis {
       }
     }
     uint64_t AvgDuration() {
-      if (durations.size () < window_size) {
+      if (durations.size() < window_size) {
         return 0;
       }
       uint64_t min = durations[0];
@@ -74,12 +74,8 @@ class Redis {
       }
       return (sum - max - min) / (durations.size() - 2);
     }
-    void AddModifyCount(uint64_t count) {
-      modify_count += count;
-    }
-    uint64_t ModifyCount() {
-      return modify_count;
-    }
+    void AddModifyCount(uint64_t count) { modify_count += count; }
+    uint64_t ModifyCount() { return modify_count; }
   };
 
   struct KeyStatisticsDurationGuard {
@@ -87,15 +83,15 @@ class Redis {
     std::string key;
     uint64_t start_us;
     DataType dtype;
-    KeyStatisticsDurationGuard(Redis* that, const DataType type, const std::string& key): ctx(that), key(key), start_us(pstd::NowMicros()), dtype(type) {
-    }
+    KeyStatisticsDurationGuard(Redis* that, const DataType type, const std::string& key)
+        : ctx(that), key(key), start_us(pstd::NowMicros()), dtype(type) {}
     ~KeyStatisticsDurationGuard() {
       uint64_t end_us = pstd::NowMicros();
       uint64_t duration = end_us > start_us ? end_us - start_us : 0;
       ctx->UpdateSpecificKeyDuration(dtype, key, duration);
     }
   };
-  int GetIndex() const {return index_;}
+  int GetIndex() const { return index_; }
 
   Status SetOptions(const OptionType& option_type, const std::unordered_map<std::string, std::string>& options);
   void SetWriteWalOptions(const bool is_wal_disable);
@@ -149,9 +145,11 @@ class Redis {
   virtual Status SetsTTL(const Slice& key, int64_t* timestamp, std::string&& prefetch_meta = {});
 
   // Strings Commands
-  Status Append(const Slice& key, const Slice& value, int32_t* ret, int64_t* expired_timestamp_sec, std::string& out_new_value);
+  Status Append(const Slice& key, const Slice& value, int32_t* ret, int64_t* expired_timestamp_sec,
+                std::string& out_new_value);
   Status BitCount(const Slice& key, int64_t start_offset, int64_t end_offset, int32_t* ret, bool have_range);
-  Status BitOp(BitOpType op, const std::string& dest_key, const std::vector<std::string>& src_keys, std::string &value_to_dest, int64_t* ret);
+  Status BitOp(BitOpType op, const std::string& dest_key, const std::vector<std::string>& src_keys,
+               std::string& value_to_dest, int64_t* ret);
   Status Decrby(const Slice& key, int64_t value, int64_t* ret);
   Status Get(const Slice& key, std::string* value);
   Status HyperloglogGet(const Slice& key, std::string* value);
@@ -160,8 +158,8 @@ class Redis {
   Status MGetWithTTL(const Slice& key, std::string* value, int64_t* ttl);
   Status GetBit(const Slice& key, int64_t offset, int32_t* ret);
   Status Getrange(const Slice& key, int64_t start_offset, int64_t end_offset, std::string* ret);
-  Status GetrangeWithValue(const Slice& key, int64_t start_offset, int64_t end_offset,
-                           std::string* ret, std::string* value, int64_t* ttl);
+  Status GetrangeWithValue(const Slice& key, int64_t start_offset, int64_t end_offset, std::string* ret,
+                           std::string* value, int64_t* ttl);
   Status GetSet(const Slice& key, const Slice& value, std::string* old_value);
   Status Incrby(const Slice& key, int64_t value, int64_t* ret, int64_t* expired_timestamp_sec);
   Status Incrbyfloat(const Slice& key, const Slice& value, std::string* ret, int64_t* expired_timestamp_sec);
@@ -189,7 +187,8 @@ class Redis {
   Status Expireat(const Slice& key, int64_t timestamp);
   Status Persist(const Slice& key);
   Status TTL(const Slice& key, int64_t* timestamp);
-  Status PKPatternMatchDelWithRemoveKeys(const std::string& pattern, int64_t* ret, std::vector<std::string>* remove_keys, const int64_t& max_count);
+  Status PKPatternMatchDelWithRemoveKeys(const std::string& pattern, int64_t* ret,
+                                         std::vector<std::string>* remove_keys, const int64_t& max_count);
 
   Status GetType(const Slice& key, enum DataType& type);
   Status IsExist(const Slice& key);
@@ -222,7 +221,6 @@ class Redis {
   Status SetSmallCompactionThreshold(uint64_t small_compaction_threshold);
   Status SetSmallCompactionDurationThreshold(uint64_t small_compaction_duration_threshold);
 
-
   std::vector<rocksdb::ColumnFamilyHandle*> GetStringCFHandles() { return {handles_[kMetaCF]}; }
 
   std::vector<rocksdb::ColumnFamilyHandle*> GetHashCFHandles() {
@@ -244,15 +242,76 @@ class Redis {
   std::vector<rocksdb::ColumnFamilyHandle*> GetStreamCFHandles() {
     return {handles_.begin() + kMetaCF, handles_.end()};
   }
-  void GetRocksDBInfo(std::string &info, const char *prefix);
+
+  std::vector<rocksdb::ColumnFamilyHandle*> GetPKHashCFHandles() {
+    return {handles_.begin() + kMetaCF, handles_.begin() + kPKHashDataCF + 1};
+  }
+
+  
+  void GetRocksDBInfo(std::string& info, const char* prefix);
+
+  // PK Hash Commands
+  Status PKHExpire(const Slice& key, int32_t ttl, int32_t numfields, const std::vector<std::string>& fields,
+                   std::vector<int32_t>* rets);
+  Status PKHExpireat(const Slice& key, int64_t timestamp, int32_t numfields, const std::vector<std::string>& fields,
+                     std::vector<int32_t>* rets);
+  Status PKHExpiretime(const Slice& key, int32_t ttl, int32_t numfields, const std::vector<std::string>& fields,
+                       std::vector<int64_t>* timestamps, std::vector<int32_t>* rets);
+
+  Status PKHTTL(const Slice& key, int32_t ttl, int32_t numfields, const std::vector<std::string>& fields, int32_t* ret);
+
+  Status PKHPersist(const Slice& key, int32_t ttl, int32_t numfields, const std::vector<std::string>& fields,
+                    int32_t* ret);
+
+  Status PKHGet(const Slice& key, const Slice& field, std::string* value);
+
+  // Ehashs Commands
+  Status PKHSet(const Slice& key, const Slice& field, const Slice& value, int32_t* res);
+  // Status PKHSetnx(const Slice& key, const Slice& field, const Slice& value, int32_t* ret, int32_t ttl);
+  // Status PKHSetex(const Slice& key, const Slice& field, const Slice& value, int32_t ttl);
+
+  // Status PKHGet(const Slice& key, const Slice& field, std::string* value);
+  // Status PKHExists(const Slice& key, const Slice& field);
+  // Status PKHDel(const Slice& key, const std::vector<std::string>& fields, int32_t* ret);
+  // Status PKHLen(const Slice& key, int32_t* ret);
+  // Status PKHLenForce(const Slice& key, int32_t* ret);
+  // Status PKHStrlen(const Slice& key, const Slice& field, int32_t* len);
+  // Status PKHIncrby(const Slice& key, const Slice& field, int64_t value, int64_t* ret, int32_t ttl);
+  // Status PKHIncrbynxex(const Slice& key, const Slice& field, int64_t value, int64_t* ret, int32_t ttl);
+  // Status PKHIncrbyxxex(const Slice& key, const Slice& field, int64_t value, int64_t* ret, int32_t ttl);
+  // Status PKHIncrbyfloat(const Slice& key, const Slice& field, const Slice& by, std::string* new_value, int32_t
+  // ttl); Status PKHIncrbyfloatnxex(const Slice& key, const Slice& field, const Slice& by, std::string* new_value,
+  // int32_t ttl); Status PKHIncrbyfloatxxex(const Slice& key, const Slice& field, const Slice& by, std::string*
+  // new_value, int32_t ttl); Status PKHMset(const Slice& key, const std::vector<FieldValue>& fvs); Status
+  // PKHMsetex(const Slice& key, const std::vector<FieldValueTTL>& fvts); Status PKHMget(const Slice& key, const
+  // std::vector<std::string>& fields, std::vector<ValueStatus>* vss); Status PKHKeys(const Slice& key,
+  // std::vector<std::string>* fields); Status PKHVals(const Slice& key, std::vector<std::string>* values); Status
+  // PKHGetall(const Slice& key, std::vector<FieldValueTTL>* fvts); Status PKHScan(const Slice& key, int64_t cursor,
+  // const std::string& pattern, int64_t count,
+  //                std::vector<FieldValueTTL>* fvts, int64_t* next_cursor);
+  // Status PKHScanx(const Slice& key, const std::string start_field, const std::string& pattern, int64_t count,
+  //                 std::vector<FieldValueTTL>* fvts, std::string* next_field);
+  // // todo 下面的方法是啥？
+  // Status PKEHScanRange(const Slice& key, const Slice& field_start, const std::string& field_end, const Slice&
+  // pattern,
+  //                      int32_t limit, std::vector<FieldValue>* field_values, std::string* next_field);
+  // Status PKEHRScanRange(const Slice& key, const Slice& field_start, const std::string& field_end, const Slice&
+  // pattern,
+  //                       int32_t limit, std::vector<FieldValue>* field_values, std::string* next_field);
+  // Status PKScanRange(const Slice& key_start, const Slice& key_end, const Slice& pattern, int32_t limit,
+  //                    std::vector<std::string>* keys, std::string* next_key);
+  // Status PKRScanRange(const Slice& key_start, const Slice& key_end, const Slice& pattern, int32_t limit,
+  //                     std::vector<std::string>* keys, std::string* next_key);
 
   // Sets Commands
   Status SAdd(const Slice& key, const std::vector<std::string>& members, int32_t* ret);
   Status SCard(const Slice& key, int32_t* ret, std::string&& prefetch_meta = {});
   Status SDiff(const std::vector<std::string>& keys, std::vector<std::string>* members);
-  Status SDiffstore(const Slice& destination, const std::vector<std::string>& keys, std::vector<std::string>& value_to_dest, int32_t* ret);
+  Status SDiffstore(const Slice& destination, const std::vector<std::string>& keys,
+                    std::vector<std::string>& value_to_dest, int32_t* ret);
   Status SInter(const std::vector<std::string>& keys, std::vector<std::string>* members);
-  Status SInterstore(const Slice& destination, const std::vector<std::string>& keys, std::vector<std::string>& value_to_dest, int32_t* ret);
+  Status SInterstore(const Slice& destination, const std::vector<std::string>& keys,
+                     std::vector<std::string>& value_to_dest, int32_t* ret);
   Status SIsmember(const Slice& key, const Slice& member, int32_t* ret);
   Status SMembers(const Slice& key, std::vector<std::string>* members);
   Status SMembersWithTTL(const Slice& key, std::vector<std::string>* members, int64_t* ttl);
@@ -261,7 +320,8 @@ class Redis {
   Status SRandmember(const Slice& key, int32_t count, std::vector<std::string>* members);
   Status SRem(const Slice& key, const std::vector<std::string>& members, int32_t* ret);
   Status SUnion(const std::vector<std::string>& keys, std::vector<std::string>* members);
-  Status SUnionstore(const Slice& destination, const std::vector<std::string>& keys, std::vector<std::string>& value_to_dest, int32_t* ret);
+  Status SUnionstore(const Slice& destination, const std::vector<std::string>& keys,
+                     std::vector<std::string>& value_to_dest, int32_t* ret);
   Status SScan(const Slice& key, int64_t cursor, const std::string& pattern, int64_t count,
                std::vector<std::string>* members, int64_t* next_cursor);
   Status AddAndGetSpopCount(const std::string& key, uint64_t* count);
@@ -291,7 +351,8 @@ class Redis {
   Status ZCount(const Slice& key, double min, double max, bool left_close, bool right_close, int32_t* ret);
   Status ZIncrby(const Slice& key, const Slice& member, double increment, double* ret);
   Status ZRange(const Slice& key, int32_t start, int32_t stop, std::vector<ScoreMember>* score_members);
-  Status ZRangeWithTTL(const Slice& key, int32_t start, int32_t stop, std::vector<ScoreMember>* score_members, int64_t* ttl);
+  Status ZRangeWithTTL(const Slice& key, int32_t start, int32_t stop, std::vector<ScoreMember>* score_members,
+                       int64_t* ttl);
   Status ZRangebyscore(const Slice& key, double min, double max, bool left_close, bool right_close, int64_t count,
                        int64_t offset, std::vector<ScoreMember>* score_members);
   Status ZRank(const Slice& key, const Slice& member, int32_t* rank);
@@ -325,7 +386,8 @@ class Redis {
   Status XAdd(const Slice& key, const std::string& serialized_message, StreamAddTrimArgs& args);
   Status XDel(const Slice& key, const std::vector<streamID>& ids, int32_t& count);
   Status XTrim(const Slice& key, StreamAddTrimArgs& args, int32_t& count);
-  Status XRange(const Slice& key, const StreamScanArgs& args, std::vector<IdMessage>& id_messages, std::string&& prefetch_meta = {});
+  Status XRange(const Slice& key, const StreamScanArgs& args, std::vector<IdMessage>& id_messages,
+                std::string&& prefetch_meta = {});
   Status XRevrange(const Slice& key, const StreamScanArgs& args, std::vector<IdMessage>& id_messages);
   Status XLen(const Slice& key, int32_t& len);
   Status XRead(const StreamReadGroupReadArgs& args, std::vector<std::vector<IdMessage>>& results,
@@ -335,7 +397,8 @@ class Redis {
                     rocksdb::ReadOptions& read_options);
   // get and parse the stream meta if found
   // @return ok only when the stream meta exists
-  Status GetStreamMeta(StreamMetaValue& tream_meta, const rocksdb::Slice& key, rocksdb::ReadOptions& read_options, std::string&& prefetch_meta = {});
+  Status GetStreamMeta(StreamMetaValue& tream_meta, const rocksdb::Slice& key, rocksdb::ReadOptions& read_options,
+                       std::string&& prefetch_meta = {});
 
   // Before calling this function, the caller should ensure that the ids are valid
   Status DeleteStreamMessages(const rocksdb::Slice& key, const StreamMetaValue& stream_meta,
@@ -355,11 +418,13 @@ class Redis {
   void ScanZsets();
   void ScanSets();
 
-  TypeIterator* CreateIterator(const DataType& type, const std::string& pattern, const Slice* lower_bound, const Slice* upper_bound) {
+  TypeIterator* CreateIterator(const DataType& type, const std::string& pattern, const Slice* lower_bound,
+                               const Slice* upper_bound) {
     return CreateIterator(DataTypeTag[static_cast<int>(type)], pattern, lower_bound, upper_bound);
   }
 
-  TypeIterator* CreateIterator(const char& type, const std::string& pattern, const Slice* lower_bound, const Slice* upper_bound) {
+  TypeIterator* CreateIterator(const char& type, const std::string& pattern, const Slice* lower_bound,
+                               const Slice* upper_bound) {
     rocksdb::ReadOptions options;
     options.fill_cache = false;
     options.iterate_lower_bound = lower_bound;
@@ -392,12 +457,12 @@ class Redis {
     return nullptr;
   }
 
-  enum DataType GetMetaValueType(const std::string &meta_value) {
+  enum DataType GetMetaValueType(const std::string& meta_value) {
     DataType meta_type = static_cast<enum DataType>(static_cast<uint8_t>(meta_value[0]));
     return meta_type;
   }
 
-  inline bool ExpectedMetaValue(enum DataType type, const std::string &meta_value) {
+  inline bool ExpectedMetaValue(enum DataType type, const std::string& meta_value) {
     auto meta_type = static_cast<enum DataType>(static_cast<uint8_t>(meta_value[0]));
     if (type == meta_type) {
       return true;
@@ -405,7 +470,7 @@ class Redis {
     return false;
   }
 
-  inline bool ExpectedStale(const std::string &meta_value) {
+  inline bool ExpectedStale(const std::string& meta_value) {
     auto meta_type = static_cast<enum DataType>(static_cast<uint8_t>(meta_value[0]));
     switch (meta_type) {
       case DataType::kZSets:
@@ -432,7 +497,7 @@ class Redis {
     }
   }
 
-private:
+ private:
   Status GenerateStreamID(const StreamMetaValue& stream_meta, StreamAddTrimArgs& args);
 
   Status StreamScanRange(const Slice& key, const uint64_t version, const Slice& id_start, const std::string& id_end,
@@ -464,15 +529,14 @@ private:
   inline Status SetFirstOrLastID(const rocksdb::Slice& key, StreamMetaValue& stream_meta, bool is_set_first,
                                  rocksdb::ReadOptions& read_options);
 
-
-private:
+ private:
   int32_t index_ = 0;
   Storage* const storage_;
   std::shared_ptr<LockMgr> lock_mgr_;
   rocksdb::DB* db_ = nullptr;
   std::shared_ptr<rocksdb::Statistics> db_statistics_ = nullptr;
-  //TODO(wangshaoyi): seperate env for each rocksdb instance
-  // rocksdb::Env* env_ = nullptr;
+  // TODO(wangshaoyi): seperate env for each rocksdb instance
+  //  rocksdb::Env* env_ = nullptr;
 
   std::vector<rocksdb::ColumnFamilyHandle*> handles_;
   rocksdb::WriteOptions default_write_options_;
@@ -483,8 +547,10 @@ private:
   std::unique_ptr<LRUCache<std::string, std::string>> scan_cursors_store_;
   std::unique_ptr<LRUCache<std::string, size_t>> spop_counts_store_;
 
-  Status GetScanStartPoint(const DataType& type, const Slice& key, const Slice& pattern, int64_t cursor, std::string* start_point);
-  Status StoreScanNextPoint(const DataType& type, const Slice& key, const Slice& pattern, int64_t cursor, const std::string& next_point);
+  Status GetScanStartPoint(const DataType& type, const Slice& key, const Slice& pattern, int64_t cursor,
+                           std::string* start_point);
+  Status StoreScanNextPoint(const DataType& type, const Slice& key, const Slice& pattern, int64_t cursor,
+                            const std::string& next_point);
 
   // For Statistics
   std::atomic_uint64_t small_compaction_threshold_;
