@@ -174,7 +174,7 @@ class PKHExpireatCmd : public Cmd {
 
  private:
   std::string key_;
-  int64_t ttl_ = 0;
+  int64_t timestamp_ = 0;
   int64_t numfields_ = 0;
   std::vector<std::string> fields_;
 

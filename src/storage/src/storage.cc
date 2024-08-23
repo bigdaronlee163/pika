@@ -484,16 +484,28 @@ Status Storage::PKHExpire(const Slice& key, int32_t ttl, int32_t numfields, cons
 }
 
 Status Storage::PKHExpireat(const Slice& key, int64_t timestamp, int32_t numfields,
-                            const std::vector<std::string>& fields, std::vector<int32_t>* rets) {}
+                            const std::vector<std::string>& fields, std::vector<int32_t>* rets) {
+  auto& inst = GetDBInstance(key);
+  return inst->PKHExpireat(key, timestamp, numfields, fields, rets);
+}
 
-Status Storage::PKHExpireTime(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
-                              std::vector<int64_t>* timestamps, std::vector<int32_t>* rets) {}
+Status Storage::PKHExpiretime(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
+                              std::vector<int64_t>* timestamps, std::vector<int32_t>* rets) {
+  auto& inst = GetDBInstance(key);
+  return inst->PKHExpiretime(key, numfields, fields, timestamps, rets);
+}
 
 Status Storage::PKHPersist(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
-                           std::vector<int32_t>* rets) {}
+                           std::vector<int32_t>* rets) {
+  auto& inst = GetDBInstance(key);
+  return inst->PKHPersist(key, numfields, fields, rets);
+}
 
 Status Storage::PKHTTL(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
-                       std::vector<int64_t>* ttls, std::vector<int32_t>* rets) {}
+                       std::vector<int64_t>* ttls, std::vector<int32_t>* rets) {
+  auto& inst = GetDBInstance(key);
+  return inst->PKHTTL(key, numfields, fields, ttls, rets);
+}
 
 Status Storage::PKHGet(const Slice& key, const Slice& field, std::string* value) {
   auto& inst = GetDBInstance(key);
@@ -1969,7 +1981,6 @@ int64_t Storage::IsExist(const Slice& key, std::map<DataType, Status>* type_stat
   }
   return type_count;
 }
-
 
 void Storage::DisableWal(const bool is_wal_disable) {
   for (const auto& inst : insts_) {

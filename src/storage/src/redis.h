@@ -247,21 +247,23 @@ class Redis {
     return {handles_.begin() + kMetaCF, handles_.begin() + kPKHashDataCF + 1};
   }
 
-  
   void GetRocksDBInfo(std::string& info, const char* prefix);
 
   // PK Hash Commands
   Status PKHExpire(const Slice& key, int32_t ttl, int32_t numfields, const std::vector<std::string>& fields,
                    std::vector<int32_t>* rets);
+
   Status PKHExpireat(const Slice& key, int64_t timestamp, int32_t numfields, const std::vector<std::string>& fields,
                      std::vector<int32_t>* rets);
-  Status PKHExpiretime(const Slice& key, int32_t ttl, int32_t numfields, const std::vector<std::string>& fields,
+
+  Status PKHExpiretime(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
                        std::vector<int64_t>* timestamps, std::vector<int32_t>* rets);
 
-  Status PKHTTL(const Slice& key, int32_t ttl, int32_t numfields, const std::vector<std::string>& fields, int32_t* ret);
+  Status PKHTTL(const Slice& key, int32_t numfields, const std::vector<std::string>& fields, std::vector<int64_t>* ttls,
+                std::vector<int32_t>* rets);
 
-  Status PKHPersist(const Slice& key, int32_t ttl, int32_t numfields, const std::vector<std::string>& fields,
-                    int32_t* ret);
+  Status PKHPersist(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
+                    std::vector<int32_t>* rets);
 
   Status PKHGet(const Slice& key, const Slice& field, std::string* value);
 

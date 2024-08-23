@@ -501,11 +501,15 @@ void InitCmdTable(CmdTable* cmd_table) {
   std::unique_ptr<Cmd> ehexpireatptr =
       std::make_unique<PKHExpireatCmd>(kCmdNamePKHExpireat, -4, kCmdFlagsWrite | kCmdFlagsPKHash);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHExpireat, std::move(ehexpireatptr)));
-  // TODO(DDD pexpire 和 pttl )
-
+  ////Ehexpiretime
+  std::unique_ptr<Cmd> ehexpiretimeptr =
+      std::make_unique<PKHExpiretimeCmd>(kCmdNamePKHExpiretime, -4, kCmdFlagsWrite | kCmdFlagsPKHash);
+  cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHExpiretime, std::move(ehexpiretimeptr)));
   ////Ehttl
-  std::unique_ptr<Cmd> ehttlptr = std::make_unique<PKHTTLCmd>(kCmdNamePKHTTL, 3, kCmdFlagsRead | kCmdFlagsPKHash);
+  std::unique_ptr<Cmd> ehttlptr =
+      std::make_unique<PKHTTLCmd>(kCmdNamePKHTTL, -4, kCmdFlagsWrite | kCmdFlagsPKHash);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHTTL, std::move(ehttlptr)));
+  
   ////Ehpersist
   std::unique_ptr<Cmd> ehpersistptr =
       std::make_unique<PKHPersistCmd>(kCmdNamePKHPersist, 3, kCmdFlagsWrite | kCmdFlagsPKHash);

@@ -89,17 +89,173 @@ void PKHExpireCmd::Do() {
   }
 }
 
-void PKHExpireatCmd::DoInitial() {}
-void PKHExpireatCmd::Do() {}
+void PKHExpireatCmd::DoInitial() {
+  if (!CheckArg(argv_.size())) {
+    res_.SetRes(CmdRes::kWrongNum, kCmdNamePKHExpire);
+    return;
+  }
+  // hexpire: argv_[0]
+  // key
+  key_ = argv_[1];  // mykey
+  auto iter = argv_.begin();
+  // timestamp_
+  if (pstd::string2int(argv_[2].data(), argv_[2].size(), &timestamp_) == 0) {
+    res_.SetRes(CmdRes::kInvalidInt);
+    return;
+  }
+  // todo: 先不实现 nx xx lt gt, 完成主体，后面在实现。
 
-void PKHExpiretimeCmd::DoInitial() {}
-void PKHExpiretimeCmd::Do() {}
+  // FIELDS
+  iter++;
+  iter++;
+  iter++;
+  iter++;
+  iter++;
 
-void PKHPersistCmd::DoInitial() {}
-void PKHPersistCmd::Do() {}
+  // numfields_
+  if (pstd::string2int(argv_[4].data(), argv_[4].size(), &numfields_) == 0) {
+    res_.SetRes(CmdRes::kInvalidInt);
+    return;
+  }
 
-void PKHTTLCmd::DoInitial() {}
-void PKHTTLCmd::Do() {}
+  // fields
+  fields_.assign(iter, argv_.end());
+}
+void PKHExpireatCmd::Do() {
+  std::vector<int32_t> rets;
+  s_ = db_->storage()->PKHExpireat(key_, timestamp_, numfields_, fields_, &rets);
+  // 需要对结果进行解析。
+  if (s_.ok()) {
+    res_.AppendArrayLenUint64(rets.size());
+    for (const auto& ret : rets) {
+      // 可能是负数。不能设置成为1.
+      // res_.AppendStringLenUint64(std::to_string(ret).size());
+      res_.AppendInteger(ret);
+    }
+  } else if (s_.IsInvalidArgument()) {
+    res_.SetRes(CmdRes::kMultiKey);
+  } else {
+    res_.SetRes(CmdRes::kErrOther, s_.ToString());
+  }
+}
+
+void PKHExpiretimeCmd::DoInitial() {
+  if (!CheckArg(argv_.size())) {
+    res_.SetRes(CmdRes::kWrongNum, kCmdNamePKHExpire);
+    return;
+  }
+  // hexpire: argv_[0]
+  // key
+  key_ = argv_[1];  // mykey
+  auto iter = argv_.begin();
+
+  // FIELDS
+  iter++;
+  // numfields
+  if (pstd::string2int(argv_[2].data(), argv_[2].size(), &numfields_) == 0) {
+    res_.SetRes(CmdRes::kInvalidInt);
+    return;
+  }
+
+  // fields
+  fields_.assign(iter, argv_.end());
+}
+void PKHExpiretimeCmd::Do() {
+  std::vector<int32_t> rets;
+  std::vector<int64_t> timestamps;
+  s_ = db_->storage()->PKHExpiretime(key_, numfields_, fields_, &timestamps, &rets);
+  // 需要对结果进行解析。
+  if (s_.ok()) {
+    res_.AppendArrayLenUint64(rets.size());
+    for (const auto& ret : rets) {
+      // 可能是负数。不能设置成为1.
+      // res_.AppendStringLenUint64(std::to_string(ret).size());
+      res_.AppendInteger(ret);
+    }
+  } else if (s_.IsInvalidArgument()) {
+    res_.SetRes(CmdRes::kMultiKey);
+  } else {
+    res_.SetRes(CmdRes::kErrOther, s_.ToString());
+  }
+}
+
+void PKHPersistCmd::DoInitial() {
+  if (!CheckArg(argv_.size())) {
+    res_.SetRes(CmdRes::kWrongNum, kCmdNamePKHExpire);
+    return;
+  }
+  // hexpire: argv_[0]
+  // key
+  key_ = argv_[1];  // mykey
+  auto iter = argv_.begin();
+  // FIELDS
+  iter++;
+  // numfields_
+  if (pstd::string2int(argv_[2].data(), argv_[2].size(), &numfields_) == 0) {
+    res_.SetRes(CmdRes::kInvalidInt);
+    return;
+  }
+
+  // fields
+  fields_.assign(iter, argv_.end());
+}
+void PKHPersistCmd::Do() {
+  std::vector<int32_t> rets;
+  s_ = db_->storage()->PKHPersist(key_, numfields_, fields_, &rets);
+  // 需要对结果进行解析。
+  if (s_.ok()) {
+    res_.AppendArrayLenUint64(rets.size());
+    for (const auto& ret : rets) {
+      // 可能是负数。不能设置成为1.
+      // res_.AppendStringLenUint64(std::to_string(ret).size());
+      res_.AppendInteger(ret);
+    }
+  } else if (s_.IsInvalidArgument()) {
+    res_.SetRes(CmdRes::kMultiKey);
+  } else {
+    res_.SetRes(CmdRes::kErrOther, s_.ToString());
+  }
+}
+
+void PKHTTLCmd::DoInitial() {
+  if (!CheckArg(argv_.size())) {
+    res_.SetRes(CmdRes::kWrongNum, kCmdNamePKHExpire);
+    return;
+  }
+  // hexpire: argv_[0]
+  // key
+  key_ = argv_[1];  // mykey
+  auto iter = argv_.begin();
+  // FIELDS
+  iter++;
+  // numfields
+  if (pstd::string2int(argv_[2].data(), argv_[2].size(), &numfields_) == 0) {
+    res_.SetRes(CmdRes::kInvalidInt);
+    return;
+  }
+
+  // fields
+  fields_.assign(iter, argv_.end());
+}
+void PKHTTLCmd::Do() {
+  std::vector<int32_t> rets;
+  std::vector<int64_t> timestamps;
+  s_ = db_->storage()->PKHTTL(key_, numfields_, fields_, &timestamps, &rets);
+  // 需要对结果进行解析。
+  // 根据rets来返回结果。
+  if (s_.ok()) {
+    res_.AppendArrayLenUint64(rets.size());
+    for (const auto& ret : rets) {
+      // 可能是负数。不能设置成为1.
+      // res_.AppendStringLenUint64(std::to_string(ret).size());
+      res_.AppendInteger(ret);
+    }
+  } else if (s_.IsInvalidArgument()) {
+    res_.SetRes(CmdRes::kMultiKey);
+  } else {
+    res_.SetRes(CmdRes::kErrOther, s_.ToString());
+  }
+}
 
 void PKHGetCmd::DoInitial() {
   if (!CheckArg(argv_.size())) {

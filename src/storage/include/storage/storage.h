@@ -427,7 +427,7 @@ class Storage {
                    std::vector<int32_t>* rets);
   Status PKHExpireat(const Slice& key, int64_t timestamp, int32_t numfields, const std::vector<std::string>& fields,
                      std::vector<int32_t>* rets);
-  Status PKHExpireTime(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
+  Status PKHExpiretime(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
                        std::vector<int64_t>* timestamps, std::vector<int32_t>* rets);
 
   Status PKHPersist(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
