@@ -108,6 +108,11 @@ class ParsedPKHashDataValue : public ParsedInternalValue {
     }
   }
 
+  void SetTimestamp(int64_t timestamp) {
+    etime_ = timestamp;
+    SetEtimeToValue();
+  }
+
  protected:
   virtual void SetVersionToValue() override {};
 

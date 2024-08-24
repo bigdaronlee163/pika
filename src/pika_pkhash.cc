@@ -151,8 +151,12 @@ void PKHExpiretimeCmd::DoInitial() {
 
   // FIELDS
   iter++;
+  iter++;
+  iter++;
+  iter++;
+
   // numfields
-  if (pstd::string2int(argv_[2].data(), argv_[2].size(), &numfields_) == 0) {
+  if (pstd::string2int(argv_[3].data(), argv_[3].size(), &numfields_) == 0) {
     res_.SetRes(CmdRes::kInvalidInt);
     return;
   }
@@ -166,11 +170,11 @@ void PKHExpiretimeCmd::Do() {
   s_ = db_->storage()->PKHExpiretime(key_, numfields_, fields_, &timestamps, &rets);
   // 需要对结果进行解析。
   if (s_.ok()) {
-    res_.AppendArrayLenUint64(rets.size());
-    for (const auto& ret : rets) {
+    res_.AppendArrayLenUint64(timestamps.size());
+    for (const auto& timestamp : timestamps) {
       // 可能是负数。不能设置成为1.
-      // res_.AppendStringLenUint64(std::to_string(ret).size());
-      res_.AppendInteger(ret);
+      // res_.AppendStringLenUint64(std::to_string(timestamp).size());
+      res_.AppendInteger(timestamp);
     }
   } else if (s_.IsInvalidArgument()) {
     res_.SetRes(CmdRes::kMultiKey);
@@ -190,8 +194,11 @@ void PKHPersistCmd::DoInitial() {
   auto iter = argv_.begin();
   // FIELDS
   iter++;
+  iter++;
+  iter++;
+  iter++;
   // numfields_
-  if (pstd::string2int(argv_[2].data(), argv_[2].size(), &numfields_) == 0) {
+  if (pstd::string2int(argv_[3].data(), argv_[3].size(), &numfields_) == 0) {
     res_.SetRes(CmdRes::kInvalidInt);
     return;
   }
@@ -228,27 +235,30 @@ void PKHTTLCmd::DoInitial() {
   auto iter = argv_.begin();
   // FIELDS
   iter++;
+  iter++;
+  iter++;
+  iter++;
   // numfields
-  if (pstd::string2int(argv_[2].data(), argv_[2].size(), &numfields_) == 0) {
+  if (pstd::string2int(argv_[3].data(), argv_[3].size(), &numfields_) == 0) {
     res_.SetRes(CmdRes::kInvalidInt);
     return;
   }
-
+  //   fields_.assign(argv_.begin() + 4, argv_.end());
   // fields
   fields_.assign(iter, argv_.end());
 }
 void PKHTTLCmd::Do() {
   std::vector<int32_t> rets;
-  std::vector<int64_t> timestamps;
-  s_ = db_->storage()->PKHTTL(key_, numfields_, fields_, &timestamps, &rets);
+  std::vector<int64_t> ttls;
+  s_ = db_->storage()->PKHTTL(key_, numfields_, fields_, &ttls, &rets);
   // 需要对结果进行解析。
   // 根据rets来返回结果。
   if (s_.ok()) {
-    res_.AppendArrayLenUint64(rets.size());
-    for (const auto& ret : rets) {
+    res_.AppendArrayLenUint64(ttls.size());
+    for (const auto& ttl : ttls) {
       // 可能是负数。不能设置成为1.
       // res_.AppendStringLenUint64(std::to_string(ret).size());
-      res_.AppendInteger(ret);
+      res_.AppendInteger(ttl);
     }
   } else if (s_.IsInvalidArgument()) {
     res_.SetRes(CmdRes::kMultiKey);

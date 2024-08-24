@@ -477,7 +477,8 @@ class Redis {
     switch (meta_type) {
       case DataType::kZSets:
       case DataType::kSets:
-      case DataType::kHashes: {
+      case DataType::kHashes:
+      case DataType::KPKHashes:  {
         ParsedBaseMetaValue parsed_meta_value(meta_value);
         return (parsed_meta_value.IsStale() || parsed_meta_value.Count() == 0);
       }

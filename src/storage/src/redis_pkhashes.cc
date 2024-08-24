@@ -35,7 +35,6 @@ Status Redis::PKHGet(const Slice& key, const Slice& field, std::string* value) {
     if (ExpectedStale(meta_value)) {
       s = Status::NotFound();
     } else {
-      // 预期的类型和实际的类型。
       return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
                                      ", expect type: " + DataTypeStrings[static_cast<int>(DataType::KPKHashes)] +
                                      ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
@@ -61,11 +60,9 @@ Status Redis::PKHGet(const Slice& key, const Slice& field, std::string* value) {
       }
     }
   }
-  // 这里有用到。s = Status::NotFound();
   return s;
 }
 
-// 增加了一个返回值。
 Status Redis::PKHSet(const Slice& key, const Slice& field, const Slice& value, int32_t* res) {
   rocksdb::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
@@ -73,8 +70,6 @@ Status Redis::PKHSet(const Slice& key, const Slice& field, const Slice& value, i
   int32_t version = 0;
   std::string meta_value;
   uint32_t statistic = 0;
-
-  // Status s = db_->Get(default_read_options_, handles_[kMetaCF], key, &meta_value);
 
   BaseMetaKey base_meta_key(key);
   Status s = db_->Get(default_read_options_, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
@@ -151,28 +146,6 @@ Status Redis::PKHSet(const Slice& key, const Slice& field, const Slice& value, i
 
   s = db_->Write(default_write_options_, &batch);
 
-  //// debug  read immmediatly
-  // BaseMetaKey read_base_meta_key(key);
-  // std::string read_meta_value;
-  // int32_t read_version = 0;
-  // // meta info
-  // s = db_->Get(default_read_options_, handles_[kMetaCF], read_base_meta_key.Encode(), &read_meta_value);
-
-  // ParsedHashesMetaValue read_parsed_hashes_meta_value(&read_meta_value);
-
-  // read_version = read_parsed_hashes_meta_value.Version();
-  // std::string* temp_value;
-  // HashesDataKey read_data_key(key, read_version, field);
-  // Status read_s = db_->Get(default_read_options_, handles_[kPKHashDataCF], read_data_key.Encode(), temp_value);
-  // if ( read_s.ok()) {
-  //   ParsedPKHashDataValue read_parsed_internal_value(temp_value);
-  //   if (read_parsed_internal_value.IsStale()) {
-  //     return Status::NotFound("Stale");
-  //   }
-  //   read_parsed_internal_value.StripSuffix();
-  // }
-  //// debug
-
   UpdateSpecificKeyStatistics(DataType::KPKHashes, key.ToString(), statistic);
   return s;
 }
@@ -240,24 +213,13 @@ Status Redis::PKHExpire(const Slice& key, int32_t ttl, int32_t numfields, const 
             batch.Put(handles_[kPKHashDataCF], data_key.Encode(), data_value);
           }
         }
-
-        s = db_->Write(default_write_options_, &batch);
-
-        s = db_->Get(default_read_options_, handles_[kPKHashDataCF], data_key.Encode(), &data_value);
-        if (s.ok()) {
-          ParsedPKHashDataValue parsed_internal_value(&data_value);
-          // 存在一个过期，就直接返回。
-          if (parsed_internal_value.IsStale()) {
-            // for test
-          }
-        }
       }
       s = db_->Write(default_write_options_, &batch);
 
       return s;
     }
   } else if (s.IsNotFound()) {
-    return Status::NotFound(is_stale ? "Stale" : "111");
+    return Status::NotFound(is_stale ? "Stale" : "NotFound");
   }
   return s;
 }
@@ -265,9 +227,15 @@ Status Redis::PKHExpire(const Slice& key, int32_t ttl, int32_t numfields, const 
 Status Redis::PKHExpireat(const Slice& key, int64_t timestamp, int32_t numfields,
                           const std::vector<std::string>& fields, std::vector<int32_t>* rets) {
   if (timestamp <= 0) {
-    // 非法情况，不对rets赋值。
-    // *ret = 2;
+    rets->assign(numfields, 2);
     return Status::InvalidArgument("invalid expire time, must be >= 0");
+  }
+
+  int64_t unix_time;
+  rocksdb::Env::Default()->GetCurrentTime(&unix_time);
+  if (timestamp < unix_time) {
+    rets->assign(numfields, 2);
+    return Status::InvalidArgument("invalid expire time, called with a past Unix time in seconds or milliseconds.");
   }
 
   rocksdb::WriteBatch batch;
@@ -297,10 +265,10 @@ Status Redis::PKHExpireat(const Slice& key, int64_t timestamp, int32_t numfields
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
     // not found 有两种结果，过期或者count为0.
     if (parsed_hashes_meta_value.IsStale()) {
-      // *ret = -2;
+      rets->assign(numfields, -2);
       return Status::NotFound("Stale");
     } else if (parsed_hashes_meta_value.Count() == 0) {
-      // *ret = -2;
+      rets->assign(numfields, -2);
       return Status::NotFound();
     } else {
       version = parsed_hashes_meta_value.Version();
@@ -308,42 +276,30 @@ Status Redis::PKHExpireat(const Slice& key, int64_t timestamp, int32_t numfields
       for (const auto& field : fields) {
         HashesDataKey data_key(key, version, field);
         std::string data_value;
+
         s = db_->Get(default_read_options_, handles_[kPKHashDataCF], data_key.Encode(), &data_value);
         if (s.ok()) {
           ParsedPKHashDataValue parsed_internal_value(&data_value);
-          // 存在一个过期，就直接返回。
           if (parsed_internal_value.IsStale()) {
             // *ret = 0;
+
             rets->push_back(-2);
             // return Status::NotFound("Stale");
           } else {
-            rets->push_back(1);
             // 修改过期时间。
             // 怎么保证这个修改生效。
-            // TODO(将绝对时间转成相对的时间。)
-            // 会不会因为阻塞导致时间差距比较多？
-            parsed_internal_value.SetRelativeTimestamp(timestamp);
+
+            parsed_internal_value.SetTimestamp(timestamp);
             batch.Put(handles_[kPKHashDataCF], data_key.Encode(), data_value);
-          }
-        }
-
-        s = db_->Write(default_write_options_, &batch);
-
-        s = db_->Get(default_read_options_, handles_[kPKHashDataCF], data_key.Encode(), &data_value);
-        if (s.ok()) {
-          ParsedPKHashDataValue parsed_internal_value(&data_value);
-          // 存在一个过期，就直接返回。
-          if (parsed_internal_value.IsStale()) {
-            // for test
+            rets->push_back(1);
           }
         }
       }
       s = db_->Write(default_write_options_, &batch);
-
       return s;
     }
   } else if (s.IsNotFound()) {
-    return Status::NotFound(is_stale ? "Stale" : "111");
+    return Status::NotFound(is_stale ? "Stale" : "NotFound");
   }
   return s;
 }
@@ -351,12 +307,6 @@ Status Redis::PKHExpireat(const Slice& key, int64_t timestamp, int32_t numfields
 // 获取具体的时间。
 Status Redis::PKHExpiretime(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
                             std::vector<int64_t>* timestamps, std::vector<int32_t>* rets) {
-  // if (ttl <= 0) {
-  //   // 非法情况，不对rets赋值。
-  //   // *ret = 2;
-  //   return Status::InvalidArgument("invalid expire time, must be >= 0");
-  // }
-
   rocksdb::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
@@ -364,17 +314,18 @@ Status Redis::PKHExpiretime(const Slice& key, int32_t numfields, const std::vect
   int32_t version = 0;
   std::string meta_value;
 
-  // rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
+  // const rocksdb::Snapshot* snapshot;
+  // ScopeSnapshot ss(db_, &snapshot);
 
   BaseMetaKey base_meta_key(key);
   Status s = db_->Get(default_read_options_, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
 
   if (s.ok() && !ExpectedMetaValue(DataType::KPKHashes, meta_value)) {
     if (ExpectedStale(meta_value)) {
+      rets->assign(numfields, -2);
       s = Status::NotFound();
     } else {
+      rets->assign(numfields, -2);
       return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
                                      ", expect type: " + DataTypeStrings[static_cast<int>(DataType::KPKHashes)] +
                                      ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
@@ -382,12 +333,13 @@ Status Redis::PKHExpiretime(const Slice& key, int32_t numfields, const std::vect
   }
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
-    // not found 有两种结果，过期或者count为0.
     if (parsed_hashes_meta_value.IsStale()) {
-      // *ret = -2;
+      rets->assign(numfields, -2);
+      timestamps->assign(numfields, -2);
       return Status::NotFound("Stale");
     } else if (parsed_hashes_meta_value.Count() == 0) {
-      // *ret = -2;
+      rets->assign(numfields, -2);
+      timestamps->assign(numfields, -2);
       return Status::NotFound();
     } else {
       version = parsed_hashes_meta_value.Version();
@@ -398,36 +350,29 @@ Status Redis::PKHExpiretime(const Slice& key, int32_t numfields, const std::vect
         s = db_->Get(default_read_options_, handles_[kPKHashDataCF], data_key.Encode(), &data_value);
         if (s.ok()) {
           ParsedPKHashDataValue parsed_internal_value(&data_value);
-          // 存在一个过期，就直接返回。
           if (parsed_internal_value.IsStale()) {
-            // *ret = 0;
-            rets->push_back(-2);
-            // return Status::NotFound("Stale");
+            rets->push_back(2);
+            timestamps->push_back(-2);
           } else {
             rets->push_back(1);
             // 修改过期时间。
             // 怎么保证这个修改生效。
             // parsed_internal_value.SetRelativeTimestamp(ttl);
-            batch.Put(handles_[kPKHashDataCF], data_key.Encode(), data_value);
-          }
-        }
-
-        s = db_->Write(default_write_options_, &batch);
-
-        s = db_->Get(default_read_options_, handles_[kPKHashDataCF], data_key.Encode(), &data_value);
-        if (s.ok()) {
-          ParsedPKHashDataValue parsed_internal_value(&data_value);
-          // 存在一个过期，就直接返回。
-          if (parsed_internal_value.IsStale()) {
-            // for test
+            // batch.Put(handles_[kPKHashDataCF], data_key.Encode(), data_value);
+            int64_t etime = parsed_internal_value.Etime();
+            if (etime == 0) {
+              timestamps->push_back(-1);
+            } else {
+              timestamps->push_back(etime);
+            }
           }
         }
       }
-      s = db_->Write(default_write_options_, &batch);
-
       return s;
     }
   } else if (s.IsNotFound()) {
+    rets->assign(numfields, -2);
+    timestamps->assign(numfields, -2);
     return Status::NotFound(is_stale ? "Stale" : "111");
   }
   return s;
@@ -435,12 +380,6 @@ Status Redis::PKHExpiretime(const Slice& key, int32_t numfields, const std::vect
 // 获取剩余的秒数。
 Status Redis::PKHTTL(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
                      std::vector<int64_t>* ttls, std::vector<int32_t>* rets) {
-  // if (ttl <= 0) {
-  //   // 非法情况，不对rets赋值。
-  //   // *ret = 2;
-  //   return Status::InvalidArgument("invalid expire time, must be >= 0");
-  // }
-
   rocksdb::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
@@ -457,8 +396,11 @@ Status Redis::PKHTTL(const Slice& key, int32_t numfields, const std::vector<std:
 
   if (s.ok() && !ExpectedMetaValue(DataType::KPKHashes, meta_value)) {
     if (ExpectedStale(meta_value)) {
+      rets->assign(numfields, -2);
+
       s = Status::NotFound();
     } else {
+      rets->assign(numfields, -2);
       return Status::InvalidArgument("WRONGTYPE, key: " + key.ToString() +
                                      ", expect type: " + DataTypeStrings[static_cast<int>(DataType::KPKHashes)] +
                                      ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
@@ -468,10 +410,12 @@ Status Redis::PKHTTL(const Slice& key, int32_t numfields, const std::vector<std:
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
     // not found 有两种结果，过期或者count为0.
     if (parsed_hashes_meta_value.IsStale()) {
-      // *ret = -2;
+      rets->assign(numfields, -2);
+      ttls->assign(numfields, -2);
       return Status::NotFound("Stale");
     } else if (parsed_hashes_meta_value.Count() == 0) {
-      // *ret = -2;
+      rets->assign(numfields, -2);
+      ttls->assign(numfields, -2);
       return Status::NotFound();
     } else {
       version = parsed_hashes_meta_value.Version();
@@ -482,33 +426,24 @@ Status Redis::PKHTTL(const Slice& key, int32_t numfields, const std::vector<std:
         s = db_->Get(default_read_options_, handles_[kPKHashDataCF], data_key.Encode(), &data_value);
         if (s.ok()) {
           ParsedPKHashDataValue parsed_internal_value(&data_value);
-          // 存在一个过期，就直接返回。
           if (parsed_internal_value.IsStale()) {
-            // *ret = 0;
             rets->push_back(-2);
-            // return Status::NotFound("Stale");
+            ttls->push_back(-2);
           } else {
-            rets->push_back(1);
-            // 修改过期时间。
-            // 怎么保证这个修改生效。
-            // TODO(DDD): 修改过期时间。
-            // parsed_internal_value.SetRelativeTimestamp(ttl);
-            batch.Put(handles_[kPKHashDataCF], data_key.Encode(), data_value);
-          }
-        }
-
-        s = db_->Write(default_write_options_, &batch);
-
-        s = db_->Get(default_read_options_, handles_[kPKHashDataCF], data_key.Encode(), &data_value);
-        if (s.ok()) {
-          ParsedPKHashDataValue parsed_internal_value(&data_value);
-          // 存在一个过期，就直接返回。
-          if (parsed_internal_value.IsStale()) {
-            // for test
+            int64_t etime = parsed_internal_value.Etime();
+            if (etime == 0) {
+              rets->push_back(-1);
+              ttls->push_back(-1);
+            } else {
+              int64_t unix_time;
+              rocksdb::Env::Default()->GetCurrentTime(&unix_time);
+              int64_t ttl = etime - unix_time;
+              rets->push_back(1);
+              ttls->push_back(ttl);
+            }
           }
         }
       }
-      s = db_->Write(default_write_options_, &batch);
 
       return s;
     }
@@ -518,25 +453,14 @@ Status Redis::PKHTTL(const Slice& key, int32_t numfields, const std::vector<std:
   return s;
 }
 
-// 持久化，移除时间。
 Status Redis::PKHPersist(const Slice& key, int32_t numfields, const std::vector<std::string>& fields,
                          std::vector<int32_t>* rets) {
-  // if (ttl <= 0) {
-  //   // 非法情况，不对rets赋值。
-  //   // *ret = 2;
-  //   return Status::InvalidArgument("invalid expire time, must be >= 0");
-  // }
-
   rocksdb::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
   bool is_stale = false;
   int32_t version = 0;
   std::string meta_value;
-
-  // rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
 
   BaseMetaKey base_meta_key(key);
   Status s = db_->Get(default_read_options_, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
@@ -552,12 +476,11 @@ Status Redis::PKHPersist(const Slice& key, int32_t numfields, const std::vector<
   }
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
-    // not found 有两种结果，过期或者count为0.
     if (parsed_hashes_meta_value.IsStale()) {
-      // *ret = -2;
+      rets->assign(numfields, -2);
       return Status::NotFound("Stale");
     } else if (parsed_hashes_meta_value.Count() == 0) {
-      // *ret = -2;
+      rets->assign(numfields, -2);
       return Status::NotFound();
     } else {
       version = parsed_hashes_meta_value.Version();
@@ -568,28 +491,12 @@ Status Redis::PKHPersist(const Slice& key, int32_t numfields, const std::vector<
         s = db_->Get(default_read_options_, handles_[kPKHashDataCF], data_key.Encode(), &data_value);
         if (s.ok()) {
           ParsedPKHashDataValue parsed_internal_value(&data_value);
-          // 存在一个过期，就直接返回。
           if (parsed_internal_value.IsStale()) {
-            // *ret = 0;
-            rets->push_back(-2);
-            // return Status::NotFound("Stale");
+            rets->push_back(-1);
           } else {
             rets->push_back(1);
-            // 修改过期时间。
-            // 怎么保证这个修改生效。
-            // parsed_internal_value.SetRelativeTimestamp(ttl);
+            parsed_internal_value.SetEtime(0);
             batch.Put(handles_[kPKHashDataCF], data_key.Encode(), data_value);
-          }
-        }
-
-        s = db_->Write(default_write_options_, &batch);
-
-        s = db_->Get(default_read_options_, handles_[kPKHashDataCF], data_key.Encode(), &data_value);
-        if (s.ok()) {
-          ParsedPKHashDataValue parsed_internal_value(&data_value);
-          // 存在一个过期，就直接返回。
-          if (parsed_internal_value.IsStale()) {
-            // for test
           }
         }
       }
@@ -598,7 +505,7 @@ Status Redis::PKHPersist(const Slice& key, int32_t numfields, const std::vector<
       return s;
     }
   } else if (s.IsNotFound()) {
-    return Status::NotFound(is_stale ? "Stale" : "111");
+    return Status::NotFound(is_stale ? "Stale" : "NotFound");
   }
   return s;
 }
