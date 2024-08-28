@@ -1,0 +1,23 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "pikabuild",
+            "type": "shell",
+            "command": "${workspaceFolder}/build.sh"
+        },
+        {
+            "label": "run",
+            "type": "shell",
+            "dependsOn": "build",
+            "command": "${workspaceFolder}/build.sh"
+            // "presentation": {
+            //     "focus": true
+            // },
+            // "group": {
+            //     "kind": "test",
+            //     "isDefault": true
+            // },
+        }
+    ]
+}

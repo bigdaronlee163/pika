@@ -1,0 +1,77 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "pika debug",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/output/pika",
+            "args": [
+                "-c",
+                "${workspaceFolder}/conf/pika.conf"
+            ],
+            "stopAtEntry": true, // start 命令
+            "cwd": "${workspaceFolder}/output", // 工作目录。
+            "environment": [],
+            "externalConsole": false, // 使用vscode内置的终端。
+            "MIMode": "gdb",
+            // "preLaunchTask": "pikabuild",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "text": "-enable-pretty-printing",
+                    "description": "enable pretty printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Add source directory",
+                    "text": "dir ${workspaceFolder}/src",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "zsets_test",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/output/src/storage/tests/zsets_test",
+            "stopAtEntry": false, // start 命令
+            "cwd": "${workspaceFolder}/output/src/storage/tests", // 工作目录。
+            "environment": [],
+            "externalConsole": false, // 使用vscode内置的终端。
+            "MIMode": "gdb",
+            // "preLaunchTask": "pikabuild",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "text": "-enable-pretty-printing",
+                    "description": "enable pretty printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Add source directory",
+                    "text": "dir ${workspaceFolder}/src",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+    ]
+}
