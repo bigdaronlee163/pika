@@ -109,7 +109,9 @@ struct ValueStatus {
   std::string value;
   Status status;
   int64_t ttl_millsec;
-  bool operator==(const ValueStatus& vs) const { return (vs.value == value && vs.status == status && vs.ttl_millsec == ttl_millsec); }
+  bool operator==(const ValueStatus& vs) const {
+    return (vs.value == value && vs.status == status && vs.ttl_millsec == ttl_millsec);
+  }
 };
 
 struct FieldValue {
@@ -124,8 +126,10 @@ struct FieldValue {
 struct FieldValueTTL {
   std::string field;
   std::string value;
-  int32_t ttl;
-  bool operator==(const FieldValueTTL& fv) const { return (fv.field == field && fv.value == value && fv.ttl == ttl); }
+  int64_t ttl_millsec;
+  bool operator==(const FieldValueTTL& fv) const {
+    return (fv.field == field && fv.value == value && fv.ttl_millsec == ttl_millsec);
+  }
 };
 
 struct IdMessage {
@@ -260,13 +264,14 @@ class Storage {
   // determined by the offsets start and end (both are inclusive)
   Status Getrange(const Slice& key, int64_t start_offset, int64_t end_offset, std::string* ret);
 
-  Status GetrangeWithValue(const Slice& key, int64_t start_offset, int64_t end_offset,
-                           std::string* ret, std::string* value, int64_t* ttl_millsec);
+  Status GetrangeWithValue(const Slice& key, int64_t start_offset, int64_t end_offset, std::string* ret,
+                           std::string* value, int64_t* ttl_millsec);
 
   // If key already exists and is a string, this command appends the value at
   // the end of the string
   // return the length of the string after the append operation
-  Status Append(const Slice& key, const Slice& value, int32_t* ret, int64_t* expired_timestamp_millsec, std::string& out_new_value);
+  Status Append(const Slice& key, const Slice& value, int32_t* ret, int64_t* expired_timestamp_millsec,
+                std::string& out_new_value);
 
   // Count the number of set bits (population counting) in a string.
   // return the number of bits set to 1
@@ -521,7 +526,7 @@ class Storage {
   // This has the same effect as running SINTER with one argument key.
   Status SMembers(const Slice& key, std::vector<std::string>* members);
 
-  Status SMembersWithTTL(const Slice& key, std::vector<std::string>* members, int64_t * ttl_millsec);
+  Status SMembersWithTTL(const Slice& key, std::vector<std::string>* members, int64_t* ttl_millsec);
 
   // Remove the specified members from the set stored at key. Specified members
   // that are not a member of this set are ignored. If key does not exist, it is
@@ -595,7 +600,8 @@ class Storage {
   // (the head of the list), 1 being the next element and so on.
   Status LRange(const Slice& key, int64_t start, int64_t stop, std::vector<std::string>* ret);
 
-  Status LRangeWithTTL(const Slice& key, int64_t start, int64_t stop, std::vector<std::string>* ret, int64_t * ttl_millsec);
+  Status LRangeWithTTL(const Slice& key, int64_t start, int64_t stop, std::vector<std::string>* ret,
+                       int64_t* ttl_millsec);
 
   // Removes the first count occurrences of elements equal to value from the
   // list stored at key. The count argument influences the operation in the
@@ -758,7 +764,7 @@ class Storage {
   Status ZRange(const Slice& key, int32_t start, int32_t stop, std::vector<ScoreMember>* score_members);
 
   Status ZRangeWithTTL(const Slice& key, int32_t start, int32_t stop, std::vector<ScoreMember>* score_members,
-                                int64_t * ttl_millsec);
+                       int64_t* ttl_millsec);
 
   // Returns all the elements in the sorted set at key with a score between min
   // and max (including elements with score equal to min or max). The elements
