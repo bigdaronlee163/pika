@@ -722,7 +722,7 @@ Status Redis::HSet(const Slice& key, const Slice& field, const Slice& value, int
   } else if (s.IsNotFound()) {
     EncodeFixed32(meta_value_buf, 1);
     HashesMetaValue hashes_meta_value(DataType::kHashes, Slice(meta_value_buf, 4));
-    version = hashes_meta_value.UpdateVersion();
+    // version = hashes_meta_value.UpdateVersion();
     batch.Put(handles_[kMetaCF], base_meta_key.Encode(), hashes_meta_value.Encode());
     HashesDataKey data_key(key, version, field);
     BaseDataValue internal_value(value);

@@ -41,10 +41,14 @@ class PKHashDataValue : public InternalValue {
     dst += user_value_.size();
     memcpy(dst, reserve_, kSuffixReserveLength);
     dst += kSuffixReserveLength;
-    EncodeFixed64(dst, ctime_);
+    
+    uint64_t ctime = ctime_ > 0 ? (ctime_ | (1ULL << 63)) : 0;
+    EncodeFixed64(dst, ctime);
     dst += kTimestampLength;
-    EncodeFixed64(dst, etime_);
-    dst += kTimestampLength;  // todo(DDD) 待确认，看这个是否需要。
+
+    uint64_t etime = etime_ > 0 ? (etime_ | (1ULL << 63)) : 0;
+    EncodeFixed64(dst, etime);
+    dst += kTimestampLength;
 
     return rocksdb::Slice(start_pos, needed);
   }
@@ -62,8 +66,10 @@ class ParsedPKHashDataValue : public ParsedInternalValue {
     if (value_->size() >= kPKHashDataValueSuffixLength) {
       user_value_ = rocksdb::Slice(value_->data(), value_->size() - kPKHashDataValueSuffixLength);
       memcpy(reserve_, value_->data() + user_value_.size(), kSuffixReserveLength);
-      ctime_ = DecodeFixed64(value_->data() + user_value_.size() + kSuffixReserveLength);
-      etime_ = DecodeFixed64(value_->data() + user_value_.size() + kSuffixReserveLength + kTimestampLength);
+      uint64_t ctime = DecodeFixed64(value_->data() + user_value_.size() + kSuffixReserveLength);
+      ctime_ = (ctime & ~(1ULL << 63));
+      uint64_t etime = DecodeFixed64(value_->data() + user_value_.size() + kSuffixReserveLength + kTimestampLength);
+      etime_ = (etime & ~(1ULL << 63));
     }
   }
 
@@ -75,8 +81,10 @@ class ParsedPKHashDataValue : public ParsedInternalValue {
     if (value.size() >= kPKHashDataValueSuffixLength) {
       user_value_ = rocksdb::Slice(value.data(), value.size() - kPKHashDataValueSuffixLength);
       memcpy(reserve_, value.data() + user_value_.size(), kSuffixReserveLength);
-      ctime_ = DecodeFixed64(value.data() + user_value_.size() + kSuffixReserveLength);
-      etime_ = DecodeFixed64(value.data() + user_value_.size() + kSuffixReserveLength + kTimestampLength);
+      uint64_t ctime = DecodeFixed64(value_->data() + user_value_.size() + kSuffixReserveLength);
+      ctime_ = (ctime & ~(1ULL << 63));
+      uint64_t etime = DecodeFixed64(value_->data() + user_value_.size() + kSuffixReserveLength + kTimestampLength);
+      etime_ = (etime & ~(1ULL << 63));
     }
   }
 
@@ -85,14 +93,16 @@ class ParsedPKHashDataValue : public ParsedInternalValue {
   void SetEtimeToValue() override {
     if (value_) {
       char* dst = const_cast<char*>(value_->data()) + value_->size() - kTimestampLength;
-      EncodeFixed64(dst, etime_);
+      uint64_t etime = etime_ > 0 ? (etime_ | (1ULL << 63)) : 0;
+      EncodeFixed64(dst, etime);
     }
   }
 
   void SetCtimeToValue() override {
     if (value_) {
       char* dst = const_cast<char*>(value_->data()) + value_->size() - kTimestampLength - kTimestampLength;
-      EncodeFixed64(dst, ctime_);
+      uint64_t ctime = ctime_ > 0 ? (ctime_ | (1ULL << 63)) : 0;
+      EncodeFixed64(dst, ctime);
     }
   }
 

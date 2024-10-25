@@ -67,10 +67,11 @@ Status Redis::PKHSet(const Slice& key, const Slice& field, const Slice& value, i
   rocksdb::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
-  int32_t version = 0;
+  uint64_t version = 0;
+
   std::string meta_value;
   uint32_t statistic = 0;
-
+  // 1. pkhash这个key是存在的。
   BaseMetaKey base_meta_key(key);
   Status s = db_->Get(default_read_options_, handles_[kMetaCF], base_meta_key.Encode(), &meta_value);
   char meta_value_buf[4] = {0};
@@ -83,8 +84,12 @@ Status Redis::PKHSet(const Slice& key, const Slice& field, const Slice& value, i
                                      ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
+
+  HashesDataKey data_key1(key, 0, "");
+  // meta key是存在的。 然后看具体的field是否存在。
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
+    // 如果已经过期，或者key里面没有元素。
     if (parsed_hashes_meta_value.Count() == 0 || parsed_hashes_meta_value.IsStale()) {
       version = parsed_hashes_meta_value.InitialMetaValue();
       parsed_hashes_meta_value.SetCount(1);
@@ -97,8 +102,11 @@ Status Redis::PKHSet(const Slice& key, const Slice& field, const Slice& value, i
       version = parsed_hashes_meta_value.Version();
       std::string data_value;
       HashesDataKey hashes_data_key(key, version, field);
+      data_key1 = hashes_data_key;
       s = db_->Get(default_read_options_, handles_[kPKHashDataCF], hashes_data_key.Encode(), &data_value);
+      // 具体的field是存在的。
       if (s.ok()) {
+        // 这里解析有崩溃的问题。【只看data_value的字符串值。】
         ParsedPKHashDataValue parsed_internal_value(data_value);
         *res = 0;
         // if [field:value] already expire and then the [field:value] should be updated
@@ -116,6 +124,7 @@ Status Redis::PKHSet(const Slice& key, const Slice& field, const Slice& value, i
             statistic++;
           }
         }
+        // 具体的field是不存在的。
       } else if (s.IsNotFound()) {
         if (!parsed_hashes_meta_value.CheckModifyCount(1)) {
           return Status::InvalidArgument("hash size overflow");
@@ -130,6 +139,7 @@ Status Redis::PKHSet(const Slice& key, const Slice& field, const Slice& value, i
         return s;
       }
     }
+    // meta key不存在。也需要新建。
   } else if (s.IsNotFound()) {
     EncodeFixed32(meta_value_buf, 1);
     HashesMetaValue hashes_meta_value(DataType::kPKHashes, Slice(meta_value_buf, 4));
@@ -145,14 +155,26 @@ Status Redis::PKHSet(const Slice& key, const Slice& field, const Slice& value, i
 
   s = db_->Write(default_write_options_, &batch);
 
+  // // debug
+  std::string data_value;
+  auto s1 = db_->Get(default_read_options_, handles_[kPKHashDataCF], data_key1.Encode(), &data_value);
+  if (s1.ok()) {
+    ParsedPKHashDataValue parsed_internal_value_get(data_value);
+    if (parsed_internal_value_get.IsStale()) {
+      return Status::NotFound("Stale");
+    }
+    parsed_internal_value_get.StripSuffix();
+  }
+  // // debug
+
   UpdateSpecificKeyStatistics(DataType::kPKHashes, key.ToString(), statistic);
   return s;
 }
 
 // Pika Hash Commands
-Status Redis::PKHExpire(const Slice& key, int32_t ttl, int32_t numfields, const std::vector<std::string>& fields,
-                        std::vector<int32_t>* rets) {
-  if (ttl <= 0) {
+Status Redis::PKHExpire(const Slice& key, int32_t ttl_millsec, int32_t numfields,
+                        const std::vector<std::string>& fields, std::vector<int32_t>* rets) {
+  if (ttl_millsec <= 0) {
     return Status::InvalidArgument("invalid expire time, must be >= 0");
   }
 
@@ -160,7 +182,8 @@ Status Redis::PKHExpire(const Slice& key, int32_t ttl, int32_t numfields, const 
   ScopeRecordLock l(lock_mgr_, key);
 
   bool is_stale = false;
-  int32_t version = 0;
+  uint64_t version = 0;
+
   std::string meta_value;
 
   // const rocksdb::Snapshot* snapshot;
@@ -178,6 +201,7 @@ Status Redis::PKHExpire(const Slice& key, int32_t ttl, int32_t numfields, const 
                                      ", get type: " + DataTypeStrings[static_cast<int>(GetMetaValueType(meta_value))]);
     }
   }
+
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
     if (parsed_hashes_meta_value.IsStale()) {
@@ -197,7 +221,7 @@ Status Redis::PKHExpire(const Slice& key, int32_t ttl, int32_t numfields, const 
             rets->push_back(-2);
           } else {
             rets->push_back(1);
-            parsed_internal_value.SetRelativeTimestamp(ttl);
+            parsed_internal_value.SetRelativeTimestamp(ttl_millsec);
             batch.Put(handles_[kPKHashDataCF], data_key.Encode(), data_value);
           }
         }
@@ -219,9 +243,11 @@ Status Redis::PKHExpireat(const Slice& key, int64_t timestamp, int32_t numfields
     return Status::InvalidArgument("invalid expire time, must be >= 0");
   }
 
-  int64_t unix_time;
-  rocksdb::Env::Default()->GetCurrentTime(&unix_time);
-  if (timestamp < unix_time) {
+  // int64_t unix_time;
+  // rocksdb::Env::Default()->GetCurrentTime(&unix_time);
+  pstd::TimeType curtime = pstd::NowMillis();
+
+  if (timestamp < curtime) {
     rets->assign(numfields, 2);
     return Status::InvalidArgument("invalid expire time, called with a past Unix time in seconds or milliseconds.");
   }
@@ -230,7 +256,8 @@ Status Redis::PKHExpireat(const Slice& key, int64_t timestamp, int32_t numfields
   ScopeRecordLock l(lock_mgr_, key);
 
   bool is_stale = false;
-  int32_t version = 0;
+  uint64_t version = 0;
+
   std::string meta_value;
 
   BaseMetaKey base_meta_key(key);
@@ -287,7 +314,8 @@ Status Redis::PKHExpiretime(const Slice& key, int32_t numfields, const std::vect
   ScopeRecordLock l(lock_mgr_, key);
 
   bool is_stale = false;
-  int32_t version = 0;
+  uint64_t version = 0;
+
   std::string meta_value;
 
   BaseMetaKey base_meta_key(key);
@@ -346,7 +374,8 @@ Status Redis::PKHTTL(const Slice& key, int32_t numfields, const std::vector<std:
   ScopeRecordLock l(lock_mgr_, key);
 
   bool is_stale = false;
-  int32_t version = 0;
+  uint64_t version = 0;
+
   std::string meta_value;
 
   BaseMetaKey base_meta_key(key);
@@ -385,10 +414,11 @@ Status Redis::PKHTTL(const Slice& key, int32_t numfields, const std::vector<std:
             if (etime == 0) {
               ttls->push_back(-1);
             } else {
-              int64_t unix_time;
-              rocksdb::Env::Default()->GetCurrentTime(&unix_time);
-              int64_t ttl = etime - unix_time;
-              ttls->push_back(ttl);
+              // int64_t unix_time;
+              // rocksdb::Env::Default()->GetCurrentTime(&unix_time);
+              pstd::TimeType curtime = pstd::NowMillis();
+              int64_t ttl_millsec = etime - curtime;
+              ttls->push_back(ttl_millsec);
             }
           }
         }
@@ -408,7 +438,8 @@ Status Redis::PKHPersist(const Slice& key, int32_t numfields, const std::vector<
   ScopeRecordLock l(lock_mgr_, key);
 
   bool is_stale = false;
-  int32_t version = 0;
+  uint64_t version = 0;
+
   std::string meta_value;
 
   BaseMetaKey base_meta_key(key);
@@ -459,15 +490,16 @@ Status Redis::PKHPersist(const Slice& key, int32_t numfields, const std::vector<
   return s;
 }
 
-Status Redis::PKHSetex(const Slice& key, const Slice& field, const Slice& value, int32_t ttl, int32_t* ret) {
-  if (ttl <= 0) {
+Status Redis::PKHSetex(const Slice& key, const Slice& field, const Slice& value, int32_t ttl_millsec, int32_t* ret) {
+  if (ttl_millsec <= 0) {
     return Status::InvalidArgument("invalid expire time");
   }
 
   rocksdb::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
-  int32_t version = 0;
+  uint64_t version = 0;
+
   std::string meta_value;
   uint32_t statistic = 0;
 
@@ -493,7 +525,7 @@ Status Redis::PKHSetex(const Slice& key, const Slice& field, const Slice& value,
       batch.Put(handles_[kMetaCF], base_meta_key.Encode(), meta_value);
       HashesDataKey data_key(key, version, field);
       PKHashDataValue ehashes_value(value);
-      ehashes_value.SetRelativeTimeInMillsec(ttl);
+      ehashes_value.SetRelativeTimeInMillsec(ttl_millsec);
       batch.Put(handles_[kPKHashDataCF], data_key.Encode(), ehashes_value.Encode());
       *ret = 1;
     } else {
@@ -505,14 +537,14 @@ Status Redis::PKHSetex(const Slice& key, const Slice& field, const Slice& value,
         *ret = 1;
         if (s.ok()) {
           PKHashDataValue ehashes_value(value);
-          ehashes_value.SetRelativeTimeInMillsec(ttl);
+          ehashes_value.SetRelativeTimeInMillsec(ttl_millsec);
           batch.Put(handles_[kPKHashDataCF], hashes_data_key.Encode(), ehashes_value.Encode());
           statistic++;
         } else if (s.IsNotFound()) {
           parsed_hashes_meta_value.ModifyCount(1);
           batch.Put(handles_[kMetaCF], key, meta_value);
           PKHashDataValue ehashes_value(value);
-          ehashes_value.SetRelativeTimeInMillsec(ttl);
+          ehashes_value.SetRelativeTimeInMillsec(ttl_millsec);
           batch.Put(handles_[kPKHashDataCF], hashes_data_key.Encode(), ehashes_value.Encode());
           statistic++;
         } else {
@@ -526,7 +558,7 @@ Status Redis::PKHSetex(const Slice& key, const Slice& field, const Slice& value,
         parsed_hashes_meta_value.ModifyCount(1);
         batch.Put(handles_[kMetaCF], base_meta_key.Encode(), meta_value);
         PKHashDataValue ehashes_value(value);
-        ehashes_value.SetRelativeTimeInMillsec(ttl);
+        ehashes_value.SetRelativeTimeInMillsec(ttl_millsec);
         batch.Put(handles_[kPKHashDataCF], hashes_data_key.Encode(), ehashes_value.Encode());
         *ret = 1;
       } else {
@@ -540,7 +572,7 @@ Status Redis::PKHSetex(const Slice& key, const Slice& field, const Slice& value,
     batch.Put(handles_[kMetaCF], base_meta_key.Encode(), hashes_meta_value.Encode());
     HashesDataKey data_key(key, version, field);
     PKHashDataValue ehashes_value(value);
-    ehashes_value.SetRelativeTimeInMillsec(ttl);
+    ehashes_value.SetRelativeTimeInMillsec(ttl_millsec);
     batch.Put(handles_[kPKHashDataCF], data_key.Encode(), ehashes_value.Encode());
     *ret = 1;
   } else {
@@ -677,7 +709,7 @@ Status Redis::PKHStrlen(const Slice& key, const Slice& field, int32_t* len) {
   return s;
 }
 
-Status Redis::PKHIncrby(const Slice& key, const Slice& field, int64_t value, int64_t* ret, int32_t ttl) {
+Status Redis::PKHIncrby(const Slice& key, const Slice& field, int64_t value, int64_t* ret, int32_t ttl_millsec) {
   *ret = 0;
   rocksdb::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
@@ -862,7 +894,8 @@ Status Redis::PKHMSetex(const Slice& key, const std::vector<FieldValueTTL>& fvts
   rocksdb::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
 
-  int32_t version = 0;
+  uint64_t version = 0;
+
   std::string meta_value;
 
   BaseMetaKey base_meta_key(key);
@@ -891,8 +924,8 @@ Status Redis::PKHMSetex(const Slice& key, const std::vector<FieldValueTTL>& fvts
       for (const auto& fv : filtered_fvs) {
         HashesDataKey hashes_data_key(key, version, fv.field);
         PKHashDataValue ehashes_value(fv.value);
-        if (fv.ttl > 0) {
-          ehashes_value.SetRelativeTimeInMillsec(fv.ttl);
+        if (fv.ttl_millsec > 0) {
+          ehashes_value.SetRelativeTimeInMillsec(fv.ttl_millsec);
         }
         batch.Put(handles_[kPKHashDataCF], hashes_data_key.Encode(), ehashes_value.Encode());
       }
@@ -906,15 +939,15 @@ Status Redis::PKHMSetex(const Slice& key, const std::vector<FieldValueTTL>& fvts
         if (s.ok()) {
           statistic++;
           PKHashDataValue ehashes_value(fv.value);
-          if (fv.ttl > 0) {
-            ehashes_value.SetRelativeTimeInMillsec(fv.ttl);
+          if (fv.ttl_millsec > 0) {
+            ehashes_value.SetRelativeTimeInMillsec(fv.ttl_millsec);
           }
           batch.Put(handles_[kPKHashDataCF], hashes_data_key.Encode(), ehashes_value.Encode());
         } else if (s.IsNotFound()) {
           count++;
           PKHashDataValue ehashes_value(fv.value);
-          if (fv.ttl > 0) {
-            ehashes_value.SetRelativeTimeInMillsec(fv.ttl);
+          if (fv.ttl_millsec > 0) {
+            ehashes_value.SetRelativeTimeInMillsec(fv.ttl_millsec);
           }
           batch.Put(handles_[kPKHashDataCF], hashes_data_key.Encode(), ehashes_value.Encode());
         } else {
@@ -938,8 +971,8 @@ Status Redis::PKHMSetex(const Slice& key, const std::vector<FieldValueTTL>& fvts
     for (const auto& fv : filtered_fvs) {
       HashesDataKey hashes_data_key(key, version, fv.field);
       PKHashDataValue ehashes_value(fv.value);
-      if (fv.ttl > 0) {
-        ehashes_value.SetRelativeTimeInMillsec(fv.ttl);
+      if (fv.ttl_millsec > 0) {
+        ehashes_value.SetRelativeTimeInMillsec(fv.ttl_millsec);
       }
       batch.Put(handles_[kPKHashDataCF], hashes_data_key.Encode(), ehashes_value.Encode());
     }
@@ -1125,18 +1158,19 @@ Status Redis::PKHGetall(const Slice& key, std::vector<FieldValueTTL>* fvts) {
         ParsedPKHashDataValue parsed_internal_value(iter->value());
 
         if (!parsed_internal_value.IsStale()) {
-          int64_t ttl = 0;
+          int64_t ttl_millsec = 0;
           int64_t etime = parsed_internal_value.Etime();
           if (etime == 0) {
-            ttl = -1;
+            ttl_millsec = -1;
           } else {
-            int64_t curtime;
-            rocksdb::Env::Default()->GetCurrentTime(&curtime);
-            ttl = (etime - curtime >= 0) ? etime - curtime : -2;
+            // int64_t curtime;
+            // rocksdb::Env::Default()->GetCurrentTime(&curtime);
+            pstd::TimeType curtime = pstd::NowMillis();
+            ttl_millsec = (etime - curtime >= 0) ? etime - curtime : -2;
           }
 
           fvts->push_back({parsed_hashes_data_key.field().ToString(), parsed_internal_value.UserValue().ToString(),
-                           static_cast<int32_t>(ttl)});
+                           static_cast<int32_t>(ttl_millsec)});
         }
       }
       delete iter;
@@ -1207,16 +1241,17 @@ Status Redis::PKHScan(const Slice& key, int64_t cursor, const std::string& patte
           ParsedPKHashDataValue parsed_internal_value(iter->value());
 
           if (!parsed_internal_value.IsStale()) {
-            int64_t ttl;
+            int64_t ttl_millsec;
             int64_t timestamp = parsed_internal_value.Etime();
             if (timestamp == 0) {
-              ttl = -1;
+              ttl_millsec = -1;
             } else {
-              int64_t curtime;
-              rocksdb::Env::Default()->GetCurrentTime(&curtime);
-              ttl = (timestamp - curtime >= 0) ? timestamp - curtime : -2;
+              // int64_t curtime;
+              // rocksdb::Env::Default()->GetCurrentTime(&curtime);
+              pstd::TimeType curtime = pstd::NowMillis();
+              ttl_millsec = (timestamp - curtime >= 0) ? timestamp - curtime : -2;
             }
-            fvts->push_back({field, parsed_internal_value.UserValue().ToString(), static_cast<int32_t>(ttl)});
+            fvts->push_back({field, parsed_internal_value.UserValue().ToString(), static_cast<int32_t>(ttl_millsec)});
           }
         }
         rest--;
@@ -1239,7 +1274,7 @@ Status Redis::PKHScan(const Slice& key, int64_t cursor, const std::string& patte
   return Status::OK();
 }
 
-Status Redis::PKHashesExpire(const Slice& key, int64_t ttl, std::string&& prefetch_meta) {
+Status Redis::PKHashesExpire(const Slice& key, int64_t ttl_millsec, std::string&& prefetch_meta) {
   std::string meta_value(std::move(prefetch_meta));
   ScopeRecordLock l(lock_mgr_, key);
   BaseMetaKey base_meta_key(key);
@@ -1267,8 +1302,8 @@ Status Redis::PKHashesExpire(const Slice& key, int64_t ttl, std::string&& prefet
       return Status::NotFound();
     }
 
-    if (ttl > 0) {
-      parsed_hashes_meta_value.SetRelativeTimestamp(ttl);
+    if (ttl_millsec > 0) {
+      parsed_hashes_meta_value.SetRelativeTimestamp(ttl_millsec);
       s = db_->Put(default_write_options_, handles_[kMetaCF], base_meta_key.Encode(), meta_value);
     } else {
       parsed_hashes_meta_value.InitialMetaValue();

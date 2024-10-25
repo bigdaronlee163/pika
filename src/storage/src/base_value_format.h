@@ -31,8 +31,8 @@ enum class DataType : uint8_t {
 };
 constexpr int DataTypeNum = int(DataType::kNones);
 
-constexpr char DataTypeTag[] = {'k', 'h', 's', 'l', 'z', 'x', 'n', 'a'};
-constexpr char* DataTypeStrings[] = {"string", "hash", "set", "list", "zset", "streams", "pkhash","none", "all"};
+constexpr char DataTypeTag[] = {'k', 'h', 's', 'l', 'z', 'x', 'e', 'n', 'a'};
+constexpr char* DataTypeStrings[] = {"string", "hash", "set", "list", "zset", "streams", "pkhash", "none", "all"};
 
 constexpr char* DataTypeToString(DataType type) {
   if (type < DataType::kStrings || type > DataType::kNones) {
@@ -49,10 +49,10 @@ constexpr char DataTypeToTag(DataType type) {
 }
 
 class InternalValue {
-public:
- explicit InternalValue(DataType type, const rocksdb::Slice& user_value) : type_(type), user_value_(user_value) {
-   ctime_ = pstd::NowMillis();
- }
+ public:
+  explicit InternalValue(DataType type, const rocksdb::Slice& user_value) : type_(type), user_value_(user_value) {
+    ctime_ = pstd::NowMillis();
+  }
 
   virtual ~InternalValue() {
     if (start_ != space_) {
