@@ -262,7 +262,7 @@ TEST_F(PKHashesTest, PKHTTLTest) {  // NOLINT
   s = db.PKHTTL("GP1_HSET_KEY", 1, {"HSET_TEST_FIELD"}, &ttls);
 
   std::cout << " ttls[0]: " << ttls[0] << " ttl: " << ttl << std::endl;
-
+  //  ttls[0]   Which is: 1999  ttl   Which is: 2000
   ASSERT_EQ(ttls[0], ttl);
 
   std::this_thread::sleep_for(std::chrono::milliseconds(3100));

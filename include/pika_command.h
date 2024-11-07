@@ -138,25 +138,25 @@ const std::string kCmdNamePKHScanRange = "pkhscanrange";
 const std::string kCmdNamePKHRScanRange = "pkhrscanrange";
 
 // PKHash
-const std::string kCmdNamePKHSet = "pkhset";
-const std::string kCmdNamePKHExpire = "pkhexpire";
-const std::string kCmdNamePKHExpireat = "pkhexpireat";
-const std::string kCmdNamePKHExpiretime = "pkhexpiretime";
-const std::string kCmdNamePKHTTL = "pkhttl";
-const std::string kCmdNamePKHPersist = "pkhpersist";
-const std::string kCmdNamePKHGet = "pkhget";
-const std::string kCmdNamePKHExists = "pkhexists";
-const std::string kCmdNamePKHDel = "pkhdel";
-const std::string kCmdNamePKHLen = "pkhlen";
-const std::string kCmdNamePKHStrlen = "pkhstrlen";
-const std::string kCmdNamePKHIncrby = "pkhincrby";
-const std::string kCmdNamePKHMSet = "pkhmset";
-const std::string kCmdNamePKHSetex = "pkhmsetex";
-const std::string kCmdNamePKHMGet = "pkhmget";
-const std::string kCmdNamePKHKeys = "pkhkeys";
-const std::string kCmdNamePKHVals = "pkhvals";
-const std::string kCmdNamePKHGetall = "pkhgetall";
-const std::string kCmdNamePKHScan = "pkhscan";
+const std::string kCmdNamePKHSet = "pkhset";                // 1
+const std::string kCmdNamePKHExpire = "pkhexpire";          // 1
+const std::string kCmdNamePKHExpireat = "pkhexpireat";      // 1
+const std::string kCmdNamePKHExpiretime = "pkhexpiretime";  // 1
+const std::string kCmdNamePKHTTL = "pkhttl";                // 1
+const std::string kCmdNamePKHPersist = "pkhpersist";        // 1
+const std::string kCmdNamePKHGet = "pkhget";                // 1
+const std::string kCmdNamePKHExists = "pkhexists";          // 1
+const std::string kCmdNamePKHDel = "pkhdel";                // 1
+const std::string kCmdNamePKHLen = "pkhlen";                // 0
+const std::string kCmdNamePKHStrlen = "pkhstrlen";          // 1 测试 val的字符串长度吧。
+const std::string kCmdNamePKHIncrby = "pkhincrby";          // 1
+const std::string kCmdNamePKHMSet = "pkhmset";              // 1
+const std::string kCmdNamePKHSetex = "pkhmsetex";           // 1
+const std::string kCmdNamePKHMGet = "pkhmget";              // 1
+const std::string kCmdNamePKHKeys = "pkhkeys";              // 1
+const std::string kCmdNamePKHVals = "pkhvals";              // 1
+const std::string kCmdNamePKHGetall = "pkhgetall";          // 1
+const std::string kCmdNamePKHScan = "pkhscan";              // 0
 
 // List
 const std::string kCmdNameLIndex = "lindex";
@@ -553,7 +553,7 @@ class Cmd : public std::enable_shared_from_this<Cmd> {
   // used for execute multikey command into different slots
   virtual void Split(const HintKeys& hint_keys) = 0;
   virtual void Merge() = 0;
-  virtual bool IsTooLargeKey(const int &max_sz) { return false; }
+  virtual bool IsTooLargeKey(const int& max_sz) { return false; }
 
   int8_t SubCmdIndex(const std::string& cmdName);  // if the command no subCommand，return -1；
 

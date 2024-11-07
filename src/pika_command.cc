@@ -487,77 +487,76 @@ void InitCmdTable(CmdTable* cmd_table) {
       kCmdNamePKHSet, -4, kCmdFlagsWrite | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHSet, std::move(ehsetptr)));
 
-  ////Ehexpire
+  ////PKHExpire
   std::unique_ptr<Cmd> ehexpireptr = std::make_unique<PKHExpireCmd>(
       kCmdNamePKHExpire, -4, kCmdFlagsWrite | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHExpire, std::move(ehexpireptr)));
-  ////Ehexpireat
+  ////PKHExpireat
   std::unique_ptr<Cmd> ehexpireatptr = std::make_unique<PKHExpireatCmd>(
       kCmdNamePKHExpireat, -4, kCmdFlagsWrite | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHExpireat, std::move(ehexpireatptr)));
-  ////Ehexpiretime
+  ////PKHExpiretime
   std::unique_ptr<Cmd> ehexpiretimeptr = std::make_unique<PKHExpiretimeCmd>(
-      kCmdNamePKHExpiretime, -4, kCmdFlagsWrite | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
+      kCmdNamePKHExpiretime, -4, kCmdFlagsRead | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHExpiretime, std::move(ehexpiretimeptr)));
-  ////Ehttl
+  ////PKHTTL
   std::unique_ptr<Cmd> ehttlptr = std::make_unique<PKHTTLCmd>(
-      kCmdNamePKHTTL, -4, kCmdFlagsWrite | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
+      kCmdNamePKHTTL, -4, kCmdFlagsRead | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHTTL, std::move(ehttlptr)));
 
-  ////Ehpersist
+  ////PKHPersist
   std::unique_ptr<Cmd> ehpersistptr = std::make_unique<PKHPersistCmd>(
       kCmdNamePKHPersist, -4, kCmdFlagsWrite | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHPersist, std::move(ehpersistptr)));
-  ////Ehget
+  ////PKHGet
   std::unique_ptr<Cmd> ehgetptr = std::make_unique<PKHGetCmd>(
       kCmdNamePKHGet, 3, kCmdFlagsRead | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHGet, std::move(ehgetptr)));
-
+  ////PKHSetex
   std::unique_ptr<Cmd> ehsetexptr = std::make_unique<PKHSetexCmd>(
       kCmdNamePKHSetex, -4, kCmdFlagsWrite | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHSetex, std::move(ehsetexptr)));
-
+  ////PKHExists
   std::unique_ptr<Cmd> ehexistsptr = std::make_unique<PKHExistsCmd>(
       kCmdNamePKHExists, 3, kCmdFlagsRead | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHExists, std::move(ehexistsptr)));
-
+  ////PKHDel
   std::unique_ptr<Cmd> ehdelptr = std::make_unique<PKHDelCmd>(
       kCmdNamePKHDel, -3, kCmdFlagsWrite | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHDel, std::move(ehdelptr)));
-
+  ////PKHLen
   std::unique_ptr<Cmd> ehlenptr = std::make_unique<PKHLenCmd>(
       kCmdNamePKHLen, 2, kCmdFlagsRead | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHLen, std::move(ehlenptr)));
-
+  ////PKHStrLen
   std::unique_ptr<Cmd> ehstrlenptr = std::make_unique<PKHStrLenCmd>(
       kCmdNamePKHStrlen, 3, kCmdFlagsRead | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHStrlen, std::move(ehstrlenptr)));
-
+  ////PKHIncrby
   std::unique_ptr<Cmd> ehincrbyptr = std::make_unique<PKHIncrbyCmd>(
       kCmdNamePKHIncrby, 4, kCmdFlagsWrite | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHIncrby, std::move(ehincrbyptr)));
-
+  ////PKHMSet
   std::unique_ptr<Cmd> ehmsetptr = std::make_unique<PKHMSetCmd>(
       kCmdNamePKHMSet, -4, kCmdFlagsWrite | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHMSet, std::move(ehmsetptr)));
-
+  ////PKHMGet
   std::unique_ptr<Cmd> ehmgetptr = std::make_unique<PKHMGetCmd>(
       kCmdNamePKHMGet, -3, kCmdFlagsRead | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHMGet, std::move(ehmgetptr)));
-
+  ////PKHKeys
   std::unique_ptr<Cmd> ehkeysptr = std::make_unique<PKHKeysCmd>(
       kCmdNamePKHKeys, 2, kCmdFlagsRead | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsFast);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHKeys, std::move(ehkeysptr)));
-  // TODO(DDD) 为啥vals是慢的命令。
-  // TODO(DDD) 这些标志位都是啥意思。
+  ////PKHVals
   std::unique_ptr<Cmd> ehvalsptr = std::make_unique<PKHValsCmd>(
       kCmdNamePKHVals, 2, kCmdFlagsRead | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsSlow);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHVals, std::move(ehvalsptr)));
-
+  ////PKHGetAll
   std::unique_ptr<Cmd> ehgetallptr = std::make_unique<PKHGetAllCmd>(
       kCmdNamePKHGetall, 2, kCmdFlagsRead | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsSlow);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHGetall, std::move(ehgetallptr)));
-
+  ////PKHScan
   std::unique_ptr<Cmd> ehscanptr = std::make_unique<PKHScanCmd>(
       kCmdNamePKHScan, -3, kCmdFlagsRead | kCmdFlagsDoThroughDB | kCmdFlagsPKHash | kCmdFlagsSlow);
   cmd_table->insert(std::pair<std::string, std::unique_ptr<Cmd>>(kCmdNamePKHScan, std::move(ehscanptr)));

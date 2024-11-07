@@ -486,7 +486,6 @@ Status Storage::PKHRScanRange(const Slice& key, const Slice& field_start, const 
 }
 
 // Pika Hash Commands
-
 Status Storage::PKHExpire(const Slice& key, int32_t ttl, int32_t numfields, const std::vector<std::string>& fields,
                           std::vector<int32_t>* rets) {
   auto& inst = GetDBInstance(key);

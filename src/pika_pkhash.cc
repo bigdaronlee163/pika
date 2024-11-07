@@ -221,16 +221,16 @@ void PKHGetCmd::Do() {
 }
 
 void PKHGetCmd::ReadCache() {
-  std::string value;
-  auto s = db_->cache()->HGet(key_, field_, &value);
-  if (s.ok()) {
-    res_.AppendStringLen(value.size());
-    res_.AppendContent(value);
-  } else if (s.IsNotFound()) {
-    res_.SetRes(CmdRes::kCacheMiss);
-  } else {
-    res_.SetRes(CmdRes::kErrOther, s.ToString());
-  }
+  // std::string value;
+  // auto s = db_->cache()->HGet(key_, field_, &value);
+  // if (s.ok()) {
+  //   res_.AppendStringLen(value.size());
+  //   res_.AppendContent(value);
+  // } else if (s.IsNotFound()) {
+  //   res_.SetRes(CmdRes::kCacheMiss);
+  // } else {
+  //   res_.SetRes(CmdRes::kErrOther, s.ToString());
+  // }
 }
 
 void PKHGetCmd::DoThroughDB() {
@@ -304,7 +304,7 @@ void PKHExistsCmd::DoInitial() {
 }
 
 void PKHExistsCmd::Do() {
-  s_ = db_->storage()->HExists(key_, field_);
+  s_ = db_->storage()->PKHExists(key_, field_);
   if (s_.ok()) {
     res_.AppendContent(":1");
   } else if (s_.IsInvalidArgument()) {
@@ -333,7 +333,7 @@ void PKHDelCmd::DoInitial() {
 }
 
 void PKHDelCmd::Do() {
-  s_ = db_->storage()->HDel(key_, fields_, &deleted_);
+  s_ = db_->storage()->PKHDel(key_, fields_, &deleted_);
 
   if (s_.ok() || s_.IsNotFound()) {
     res_.AppendInteger(deleted_);
@@ -358,7 +358,7 @@ void PKHLenCmd::DoInitial() {
 
 void PKHLenCmd::Do() {
   int32_t len = 0;
-  s_ = db_->storage()->HLen(key_, &len);
+  s_ = db_->storage()->PKHLen(key_, &len);
   if (s_.ok() || s_.IsNotFound()) {
     res_.AppendInteger(len);
   } else if (s_.IsInvalidArgument()) {
@@ -383,7 +383,7 @@ void PKHStrLenCmd::DoInitial() {
 
 void PKHStrLenCmd::Do() {
   int32_t len = 0;
-  s_ = db_->storage()->HStrlen(key_, field_, &len);
+  s_ = db_->storage()->PKHStrlen(key_, field_, &len);
   if (s_.ok() || s_.IsNotFound()) {
     res_.AppendInteger(len);
   } else if (s_.IsInvalidArgument()) {
@@ -400,7 +400,6 @@ void PKHStrLenCmd::DoThroughDB() {
 
 void PKHStrLenCmd::DoUpdateCache() {}
 
-
 void PKHIncrbyCmd::DoInitial() {
   if (!CheckArg(argv_.size())) {
     res_.SetRes(CmdRes::kWrongNum, kCmdNamePKHIncrby);
@@ -416,7 +415,7 @@ void PKHIncrbyCmd::DoInitial() {
 
 void PKHIncrbyCmd::Do() {
   int64_t new_value = 0;
-  s_ = db_->storage()->HIncrby(key_, field_, by_, &new_value);
+  s_ = db_->storage()->PKHIncrby(key_, field_, by_, &new_value);
   if (s_.ok() || s_.IsNotFound()) {
     res_.AppendContent(":" + std::to_string(new_value));
     AddSlotKey("h", key_, db_);
@@ -435,7 +434,6 @@ void PKHIncrbyCmd::Do() {
 void PKHIncrbyCmd::DoThroughDB() { Do(); }
 
 void PKHIncrbyCmd::DoUpdateCache() {}
-
 
 void PKHMSetCmd::DoInitial() {
   if (!CheckArg(argv_.size())) {
@@ -456,7 +454,7 @@ void PKHMSetCmd::DoInitial() {
 }
 
 void PKHMSetCmd::Do() {
-  s_ = db_->storage()->HMSet(key_, fvs_);
+  s_ = db_->storage()->PKHMSet(key_, fvs_);
   if (s_.ok()) {
     res_.SetRes(CmdRes::kOk);
     AddSlotKey("h", key_, db_);
@@ -485,7 +483,7 @@ void PKHMGetCmd::DoInitial() {
 
 void PKHMGetCmd::Do() {
   std::vector<storage::ValueStatus> vss;
-  s_ = db_->storage()->HMGet(key_, fields_, &vss);
+  s_ = db_->storage()->PKHMGet(key_, fields_, &vss);
   if (s_.ok() || s_.IsNotFound()) {
     res_.AppendArrayLenUint64(vss.size());
     for (const auto& vs : vss) {
@@ -507,7 +505,6 @@ void PKHMGetCmd::DoThroughDB() { Do(); }
 
 void PKHMGetCmd::DoUpdateCache() {}
 
-
 void PKHKeysCmd::DoInitial() {
   if (!CheckArg(argv_.size())) {
     res_.SetRes(CmdRes::kWrongNum, kCmdNamePKHKeys);
@@ -518,7 +515,7 @@ void PKHKeysCmd::DoInitial() {
 
 void PKHKeysCmd::Do() {
   std::vector<std::string> fields;
-  s_ = db_->storage()->HKeys(key_, &fields);
+  s_ = db_->storage()->PKHKeys(key_, &fields);
   if (s_.ok() || s_.IsNotFound()) {
     res_.AppendArrayLenUint64(fields.size());
     for (const auto& field : fields) {
@@ -535,7 +532,6 @@ void PKHKeysCmd::DoThroughDB() { Do(); }
 
 void PKHKeysCmd::DoUpdateCache() {}
 
-
 void PKHValsCmd::DoInitial() {
   if (!CheckArg(argv_.size())) {
     res_.SetRes(CmdRes::kWrongNum, kCmdNamePKHVals);
@@ -546,7 +542,7 @@ void PKHValsCmd::DoInitial() {
 
 void PKHValsCmd::Do() {
   std::vector<std::string> values;
-  s_ = db_->storage()->HVals(key_, &values);
+  s_ = db_->storage()->PKHVals(key_, &values);
   if (s_.ok() || s_.IsNotFound()) {
     res_.AppendArrayLenUint64(values.size());
     for (const auto& value : values) {
@@ -579,11 +575,11 @@ void PKHGetAllCmd::Do() {
   int64_t next_cursor = 0;
   size_t raw_limit = g_pika_conf->max_client_response_size();
   std::string raw;
-  std::vector<storage::FieldValue> fvs;
+  std::vector<storage::FieldValueTTL> fvs;
 
   do {
     fvs.clear();
-    s_ = db_->storage()->HScan(key_, cursor, "*", PIKA_SCAN_STEP_LENGTH, &fvs, &next_cursor);
+    s_ = db_->storage()->PKHScan(key_, cursor, "*", PIKA_SCAN_STEP_LENGTH, &fvs, &next_cursor);
     if (!s_.ok()) {
       raw.clear();
       total_fv = 0;
@@ -615,7 +611,6 @@ void PKHGetAllCmd::Do() {
 void PKHGetAllCmd::DoThroughDB() { Do(); }
 
 void PKHGetAllCmd::DoUpdateCache() {}
-
 
 void PKHScanCmd::DoInitial() {
   if (!CheckArg(argv_.size())) {
@@ -658,8 +653,8 @@ void PKHScanCmd::DoInitial() {
 
 void PKHScanCmd::Do() {
   int64_t next_cursor = 0;
-  std::vector<storage::FieldValue> field_values;
-  auto s = db_->storage()->HScan(key_, cursor_, pattern_, count_, &field_values, &next_cursor);
+  std::vector<storage::FieldValueTTL> field_values;
+  auto s = db_->storage()->PKHScan(key_, cursor_, pattern_, count_, &field_values, &next_cursor);
 
   if (s.ok() || s.IsNotFound()) {
     res_.AppendContent("*2");
@@ -683,4 +678,3 @@ void PKHScanCmd::Do() {
 void PKHScanCmd::DoThroughDB() { Do(); }
 
 void PKHScanCmd::DoUpdateCache() {}
-
