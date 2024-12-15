@@ -31,6 +31,7 @@ set ::all_tests {
     unit/type/zset
     unit/type/string
     unit/type/hash
+    unit/type/pkhash
     unit/multi
     unit/type/stream
     # unit/expire
